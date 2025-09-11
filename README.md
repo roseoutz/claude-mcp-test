@@ -1,127 +1,192 @@
-# Code AI MCP Server (Node.js)
+# Code AI MCP - Monorepo Architecture
 
-TypeScript와 Node.js로 구현된 고성능 MCP(Model Context Protocol) 서버로, 코드베이스 분석 및 AI 통합 기능을 제공합니다.
+AI 기반 코드베이스 분석 및 이해를 위한 MCP(Model Context Protocol) 서버 모노레포입니다.
 
-## 🚀 프로젝트 개요
+## 🏗 아키텍처
 
-이 프로젝트는 Spring Boot + Kotlin 기반의 기존 구현을 TypeScript + Node.js로 마이그레이션한 버전입니다. MCP 프로토콜의 특성을 고려하여 더 가벼우면서도 효율적인 구현을 제공합니다.
+```
+code-ai-mcp-monorepo/
+├── packages/
+│   ├── local-mcp/     # 로컬 MCP 서버 (NestJS v11)
+│   ├── aws-api/       # AWS API 서버 (gRPC + REST)
+│   └── shared/        # 공통 타입 및 Proto 정의
+└── docker/            # 인프라 서비스 설정
+```
 
-### 주요 특징
+### 통신 구조
 
-- **🎯 MCP 네이티브 지원**: `@modelcontextprotocol/sdk` 공식 패키지 활용
-- **⚡ 고성능**: 빠른 시작 시간과 낮은 메모리 사용량
-- **🔧 간편한 설치**: 복잡한 Java/Spring 설정 불필요
-- **🛠️ TypeScript 지원**: 강타입 시스템으로 안정성 확보
-- **📁 코드베이스 분석**: Git 레포지토리 분석 및 변경사항 추적
+```
+로컬 MCP 서버 (NestJS)
+    ↓ gRPC + HTTP/2 (스트리밍)
+AWS API 서버
+    ↓
+AWS 인프라 (RDS, S3, ElastiCache)
+```
 
-## 🛠️ 기술 스택
+## 🚀 주요 기능
 
-- **Runtime**: Node.js 18+
-- **언어**: TypeScript 5.3+
-- **MCP SDK**: `@modelcontextprotocol/sdk`
-- **Git 작업**: `simple-git`
-- **AI 통합**: OpenAI API
-- **빌드 도구**: TypeScript Compiler
+### gRPC 통신 패턴
+- **Unary RPC**: 단순 학습 요청
+- **Server Streaming**: 분석 진행상황, 검색 결과, Diff 분석
+- **Bidirectional Streaming**: 대화형 AI 채팅
 
-## 📋 제공 도구 (Tools)
+### MCP Tools
+- `learn-codebase`: Git 리포지토리 학습 및 분석
+- `search-code`: 시맨틱 코드 검색
+- `analyze-diff`: 브랜치 간 차이 분석
+- `chat-with-code`: AI 기반 코드 대화
 
-### 1. `learn_codebase`
-- **목적**: 코드베이스를 학습하고 인덱싱합니다
-- **입력**: 
-  - `repoPath`: 분석할 레포지토리 경로
-  - `branch`: 분석할 브랜치명 (기본값: "main")
-- **출력**: 분석된 파일 수, 식별된 컴포넌트, 통계 정보
+## 🛠 기술 스택
 
-### 2. `analyze_branch_diff`
-- **목적**: 브랜치 간 차이점을 분석합니다
-- **입력**:
-  - `repoPath`: 레포지토리 경로
-  - `baseBranch`: 기본 브랜치
-  - `targetBranch`: 대상 브랜치
-- **출력**: 변경된 파일, 추가/삭제된 라인 수, 변경사항 요약
+### Local MCP Server
+- **Framework**: NestJS v11
+- **Protocol**: MCP (Model Context Protocol)
+- **Communication**: gRPC Client, SSE
+- **Dependencies**: 
+  - `@modelcontextprotocol/sdk`
+  - `@grpc/grpc-js`
+  - `simple-git`
+  - `glob`
 
-### 3. `explain_feature`
-- **목적**: 특정 기능에 대한 상세한 설명을 제공합니다
-- **입력**:
-  - `featureId`: 설명할 기능 ID
-  - `includeCodeExamples`: 코드 예시 포함 여부
-- **출력**: 기능 설명 및 관련 코드 예시
+### AWS API Server
+- **Runtime**: Node.js + Express
+- **Protocol**: gRPC Server + REST API
+- **AI Integration**: OpenAI API
+- **AWS Services**: 
+  - S3 (객체 저장)
+  - DynamoDB (메타데이터)
+  - Lambda/ECS (배포 옵션)
 
-### 4. `analyze_impact`
-- **목적**: 코드 변경이 시스템에 미치는 영향을 분석합니다
-- **입력**:
-  - `changeDescription`: 변경사항 설명
-  - `affectedFiles`: 영향받는 파일 목록
-  - `analysisDepth`: 분석 깊이 ("basic" | "deep")
-- **출력**: 직접/간접적 영향도, 위험도 평가, 권장사항
+### Shared Package
+- **Protocol Buffers**: gRPC 서비스 정의
+- **Type Definitions**: Zod 스키마
+- **Utilities**: 공통 유틸리티 함수
 
-## 🚀 빠른 시작
+## 📦 설치 및 실행
 
-### 1. 설치
+### 사전 요구사항
+- Node.js >= 22.0.0
+- npm >= 10.0.0
+- Docker & Docker Compose (선택사항)
 
+### 설치
 ```bash
 # 의존성 설치
 npm install
 
-# TypeScript 컴파일
+# 모든 패키지 빌드
 npm run build
 ```
 
-### 2. 개발 환경 실행
+### 개발 환경 실행
 
+#### 1. 환경 변수 설정
 ```bash
-# 개발 모드 (hot reload)
-npm run dev
+# 루트 디렉토리
+cp .env.example .env
+
+# 필수 환경 변수
+OPENAI_API_KEY=your_openai_api_key
+GRPC_SERVER_URL=localhost:50051
 ```
 
-### 3. 프로덕션 실행
-
+#### 2. AWS API 서버 실행
 ```bash
-# 프로덕션 빌드 후 실행
-npm run build
-npm start
+npm run dev:aws
+# HTTP: http://localhost:3000
+# gRPC: localhost:50051
+```
+
+#### 3. 로컬 MCP 서버 실행
+```bash
+npm run dev:local
+# HTTP: http://localhost:3001
+```
+
+### Docker 인프라 (선택사항)
+```bash
+# 인프라 서비스 시작
+docker-compose up -d
+
+# 서비스 종료
+docker-compose down
+```
+
+제공되는 서비스:
+- ChromaDB (포트: 8000) - 벡터 데이터베이스
+- Redis (포트: 6379) - 캐싱
+- PostgreSQL (포트: 5432) - 메타데이터 저장
+- MinIO (포트: 9000) - S3 호환 객체 저장소
+- Nginx (포트: 80) - 리버스 프록시
+
+## 📝 API 사용 예시
+
+### 1. 코드베이스 학습
+```bash
+curl -X POST http://localhost:3001/analysis/learn \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repository": "/path/to/repo",
+    "branch": "main",
+    "patterns": ["**/*.ts", "**/*.js"]
+  }'
+```
+
+### 2. 코드 검색 (SSE 스트리밍)
+```bash
+curl -N http://localhost:3001/analysis/search/session123/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "authentication logic",
+    "semantic": true
+  }'
+```
+
+### 3. 대화형 채팅
+```bash
+# 세션 시작
+curl -X POST http://localhost:3001/analysis/chat/start \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "chat123"}'
+
+# 메시지 전송
+curl -X POST http://localhost:3001/analysis/chat/chat123/message \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Explain the authentication flow",
+    "contextFiles": ["src/auth/auth.service.ts"]
+  }'
 ```
 
 ## 🧪 테스트
 
 ```bash
-# 테스트 실행
+# 모든 패키지 테스트
 npm test
 
-# 테스트 watch 모드
-npm run test:watch
+# 특정 패키지 테스트
+npm test -w @code-ai/local-mcp
+npm test -w @code-ai/aws-api
 ```
 
-## 📊 성능 비교
+## 🚢 배포
 
-| 측면 | Spring Boot 버전 | Node.js 버전 | 개선도 |
-|------|-----------------|--------------|--------|
-| 시작 시간 | ~15초 | ~1초 | 15x 빠름 |
-| 메모리 사용 | ~512MB | ~50MB | 10x 적음 |
-| 의존성 크기 | ~200MB | ~20MB | 10x 작음 |
-| 개발 속도 | 보통 | 빠름 | 3x 빠름 |
-
-## 🔧 설정
-
-### 환경 변수
-
+### AWS 배포 (aws-api)
 ```bash
-# .env 파일 생성
-OPENAI_API_KEY=your_openai_api_key_here
-MCP_SERVER_NAME=code-ai-mcp-node
-MCP_SERVER_VERSION=1.0.0
+cd packages/aws-api
+npm run deploy  # AWS CDK 사용
 ```
 
 ### Claude Desktop 연동
-
-Claude Desktop의 `claude_desktop_config.json`에 다음 설정 추가:
-
 ```json
 {
   "mcpServers": {
-    "code-ai-mcp": {
+    "code-ai": {
       "command": "node",
-      "args": ["/path/to/code-ai-mcp-node/dist/server.js"]
+      "args": ["packages/local-mcp/dist/main.js"],
+      "env": {
+        "GRPC_SERVER_URL": "your-aws-server:50051"
+      }
     }
   }
 }
@@ -130,48 +195,86 @@ Claude Desktop의 `claude_desktop_config.json`에 다음 설정 추가:
 ## 📁 프로젝트 구조
 
 ```
-code-ai-mcp-node/
-├── src/
-│   ├── server.ts              # MCP 서버 메인 엔트리포인트
-│   ├── types/                 # TypeScript 타입 정의
-│   └── tools/                 # MCP 도구 구현
-│       ├── learn-codebase.ts
-│       ├── analyze-diff.ts
-│       ├── explain-feature.ts
-│       └── analyze-impact.ts
-├── docs/                      # 문서화
-├── dist/                      # 컴파일된 JavaScript 파일
-├── package.json
-├── tsconfig.json
+├── packages/
+│   ├── local-mcp/          # 로컬 MCP 서버
+│   │   ├── src/
+│   │   │   ├── main.ts     # NestJS 진입점
+│   │   │   ├── app.module.ts
+│   │   │   ├── mcp/        # MCP 프로토콜 구현
+│   │   │   ├── grpc/       # gRPC 클라이언트
+│   │   │   └── analysis/   # 분석 서비스
+│   │   └── package.json
+│   │
+│   ├── aws-api/            # AWS API 서버
+│   │   ├── src/
+│   │   │   ├── index.ts    # Express 서버
+│   │   │   ├── grpc/       # gRPC 서버 구현
+│   │   │   └── routes/     # REST API 라우트
+│   │   └── package.json
+│   │
+│   └── shared/             # 공통 패키지
+│       ├── src/
+│       │   ├── types/      # TypeScript 타입
+│       │   └── utils/      # 유틸리티 함수
+│       └── proto/          # Protocol Buffers
+│           └── analysis.proto
+│
+├── docker/                 # Docker 설정
+├── package.json           # 모노레포 루트
+├── tsconfig.base.json     # 공통 TypeScript 설정
 └── README.md
 ```
 
+## 🔧 개발 가이드
+
+### 새로운 MCP Tool 추가
+1. `packages/shared/proto/analysis.proto`에 gRPC 서비스 정의
+2. `packages/aws-api/src/grpc/grpc.server.ts`에 서버 구현
+3. `packages/local-mcp/src/grpc/grpc-client.service.ts`에 클라이언트 메서드 추가
+4. `packages/local-mcp/src/mcp/mcp.service.ts`에 MCP 핸들러 추가
+
+### 코드 스타일
+```bash
+# Lint 실행
+npm run lint
+
+# 빌드
+npm run build
+```
+
+## 📊 성능 특징
+
+| 측면 | 설명 |
+|------|------|
+| **시작 시간** | ~1초 (NestJS 최적화) |
+| **메모리 사용** | ~100MB (기본 상태) |
+| **스트리밍** | gRPC HTTP/2 기반 실시간 스트리밍 |
+| **확장성** | 모노레포 구조로 독립적 스케일링 가능 |
+
 ## 🛣️ 로드맵
 
-- [x] 기본 MCP 서버 구현
-- [x] 코드베이스 학습 도구
-- [x] 브랜치 차이 분석 도구
-- [x] 기능 설명 도구
-- [x] 영향도 분석 도구
-- [ ] 벡터 데이터베이스 통합
-- [ ] 캐싱 시스템 구현
-- [ ] 더 많은 프로그래밍 언어 지원
-- [ ] 웹 인터페이스 제공
+- [x] 모노레포 구조 구현
+- [x] NestJS v11 마이그레이션
+- [x] gRPC + 스트리밍 통신
+- [x] MCP 프로토콜 구현
+- [ ] AWS Lambda 배포 지원
+- [ ] Kubernetes 배포 차트
+- [ ] 벡터 DB 통합 (ChromaDB)
+- [ ] 웹 대시보드 UI
 
-## 🤝 기여하기
+## 🤝 기여
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+기여를 환영합니다! PR을 제출하기 전에 다음을 확인해주세요:
+- 모든 테스트 통과
+- Lint 규칙 준수
+- 문서 업데이트
 
-## 📄 라이센스
+## 📄 라이선스
 
-MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
+MIT
 
 ## 🙏 감사의 말
 
 - [Anthropic](https://anthropic.com)의 MCP 프로토콜 개발팀
-- [Model Context Protocol SDK](https://github.com/modelcontextprotocol/sdk) 개발자들
-- 오픈소스 커뮤니티의 모든 기여자들
+- [NestJS](https://nestjs.com) 커뮤니티
+- [gRPC](https://grpc.io) 프로젝트

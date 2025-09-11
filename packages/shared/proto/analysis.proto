@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package codeai;
+
+service AnalysisService {
+  // Unary RPC - 단순 학습 요청
+  rpc LearnCodebase(LearnRequest) returns (LearnResponse);
+  
+  // Server Streaming - 분석 진행 상황 스트리밍
+  rpc AnalyzeCodebase(AnalyzeRequest) returns (stream AnalyzeProgress);
+  
+  // Server Streaming - 코드 검색 결과 스트리밍
+  rpc SearchCode(SearchRequest) returns (stream SearchResult);
+  
+  // Bidirectional Streaming - 대화형 질문/답변
+  rpc ChatWithCode(stream ChatMessage) returns (stream ChatResponse);
+  
+  // Server Streaming - Diff 분석 결과 스트리밍
+  rpc AnalyzeDiff(DiffRequest) returns (stream DiffResult);
+}
+
+// 학습 요청/응답
+message LearnRequest {
+  string repository_path = 1;
+  string branch = 2;
+  repeated string file_patterns = 3;
+  map<string, string> metadata = 4;
+}
+
+message LearnResponse {
+  bool success = 1;
+  string session_id = 2;
+  int32 files_processed = 3;
+  int64 total_size_bytes = 4;
+  string message = 5;
+}
+
+// 분석 요청/진행상황
+message AnalyzeRequest {
+  string session_id = 1;
+  string analysis_type = 2; // "architecture", "security", "performance", "quality"
+  map<string, string> options = 3;
+}
+
+message AnalyzeProgress {
+  string stage = 1; // "parsing", "analyzing", "generating"
+  float progress = 2; // 0.0 ~ 1.0
+  string current_file = 3;
+  string message = 4;
+  oneof result {
+    AnalysisResult final_result = 5;
+  }
+}
+
+message AnalysisResult {
+  string summary = 1;
+  repeated Finding findings = 2;
+  map<string, int32> statistics = 3;
+}
+
+message Finding {
+  string type = 1;
+  string severity = 2; // "low", "medium", "high", "critical"
+  string file_path = 3;
+  int32 line_number = 4;
+  string description = 5;
+  string suggestion = 6;
+}
+
+// 코드 검색
+message SearchRequest {
+  string session_id = 1;
+  string query = 2;
+  repeated string file_types = 3;
+  int32 max_results = 4;
+  bool semantic_search = 5; // true면 AI 임베딩 검색
+}
+
+message SearchResult {
+  string file_path = 1;
+  int32 line_number = 2;
+  string code_snippet = 3;
+  float relevance_score = 4;
+  string explanation = 5;
+}
+
+// 대화형 채팅
+message ChatMessage {
+  string session_id = 1;
+  string message = 2;
+  repeated string context_files = 3; // 참조할 파일 경로들
+  map<string, string> metadata = 4;
+}
+
+message ChatResponse {
+  string response = 1;
+  repeated CodeReference references = 2;
+  bool is_complete = 3;
+  string thinking_process = 4; // AI의 추론 과정
+}
+
+message CodeReference {
+  string file_path = 1;
+  int32 start_line = 2;
+  int32 end_line = 3;
+  string snippet = 4;
+  string relevance = 5;
+}
+
+// Diff 분석
+message DiffRequest {
+  string session_id = 1;
+  string base_branch = 2;
+  string target_branch = 3;
+  bool include_impact_analysis = 4;
+}
+
+message DiffResult {
+  string file_path = 1;
+  repeated Change changes = 2;
+  string impact_summary = 3;
+  repeated string affected_components = 4;
+}
+
+message Change {
+  string type = 1; // "added", "modified", "deleted"
+  int32 line_number = 2;
+  string before = 3;
+  string after = 4;
+  string explanation = 5;
+}

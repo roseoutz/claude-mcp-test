@@ -1,37 +1,22 @@
 {
-  "name": "code-ai-mcp-node",
+  "name": "code-ai-mcp-monorepo",
   "version": "1.0.0",
-  "description": "TypeScript/Node.js MCP Server for codebase analysis and AI integration",
-  "main": "dist/server.js",
+  "private": true,
+  "description": "Monorepo for MCP server and AWS API services",
   "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/server.ts",
-    "start": "node dist/server.js",
-    "test": "vitest",
-    "lint": "eslint src/**/*.ts",
-    "clean": "rm -rf dist"
-  },
-  "keywords": [
-    "mcp",
-    "model-context-protocol", 
-    "claude",
-    "ai",
-    "codebase-analysis",
-    "typescript"
+  "workspaces": [
+    "packages/*"
   ],
-  "author": "Turner",
-  "license": "MIT",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "simple-git": "^3.20.0",
-    "glob": "^10.3.10",
-    "openai": "^4.28.0",
-    "chroma-js": "^2.4.2"
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:local": "npm run dev -w @code-ai/local-mcp",
+    "dev:aws": "npm run dev -w @code-ai/aws-api",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces"
   },
   "devDependencies": {
     "@types/node": "^20.11.17",
-    "@types/glob": "^8.1.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.56.0",

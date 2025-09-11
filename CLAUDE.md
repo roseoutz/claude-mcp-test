@@ -7,15 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-### Building and Running
-- **Build TypeScript**: `npm run build` - Compiles TypeScript to JavaScript in `/dist`
-- **Development mode**: `npm run dev` - Runs TypeScript directly with hot reload using tsx
-- **Production mode**: `npm start` - Runs compiled JavaScript from `/dist`
-- **Clean build**: `npm run clean` - Removes `/dist` directory
+### Monorepo Management
+- **Install all packages**: `npm install` - Installs dependencies for all workspaces
+- **Build all**: `npm run build` - Builds all packages in the monorepo
+- **Clean all**: `npm run clean` - Cleans all package distributions
 
-### Testing and Quality
-- **Run tests**: `npm test` - Executes Vitest test suite
-- **Lint code**: `npm run lint` - Runs ESLint on all TypeScript files in `/src`
+### Local MCP Server (NestJS v11)
+- **Development mode**: `npm run dev:local` - Runs NestJS server with hot reload
+- **Build**: `npm run build -w @code-ai/local-mcp`
+- **Test**: `npm test -w @code-ai/local-mcp`
+
+### AWS API Server
+- **Development mode**: `npm run dev:aws` - Runs both HTTP and gRPC servers
+- **Build**: `npm run build -w @code-ai/aws-api`
+- **Deploy**: `cd packages/aws-api && npm run deploy` - Deploy using AWS CDK
 
 ### Docker Infrastructure
 - **Start services**: `docker-compose up -d` - Starts ChromaDB, Redis, PostgreSQL, MinIO, and Nginx
@@ -23,53 +28,75 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-This is a TypeScript/Node.js MCP (Model Context Protocol) server that provides codebase analysis tools. The project follows an ES Module structure (`"type": "module"` in package.json) and targets ES2022.
+This is a monorepo architecture with three main packages:
 
-### Core Components
+### Package Structure
 
-**MCP Server** (`src/server.ts`)
-- Main entry point implementing the MCP protocol using `@modelcontextprotocol/sdk`
-- Communicates via STDIO transport
-- Registers and handles tool calls
+**`packages/local-mcp`** - Local MCP Server
+- **Framework**: NestJS v11
+- **Main Module**: `src/app.module.ts`
+- **MCP Service**: `src/mcp/mcp.service.ts` - Implements MCP protocol handlers
+- **gRPC Client**: `src/grpc/grpc-client.service.ts` - Communicates with AWS server
+- **Analysis Module**: Handles streaming responses and chat sessions
 
-**Tool Implementations** (`src/tools/`)
-- `learn-codebase.ts`: Analyzes Git repositories, extracts file statistics, identifies components (currently the only implemented tool)
-- `analyze-diff.ts`: Branch difference analysis (not yet implemented)
-- `explain-feature.ts`: Feature explanation (not yet implemented)  
-- `analyze-impact.ts`: Change impact analysis (not yet implemented)
+**`packages/aws-api`** - AWS API Server
+- **Runtime**: Node.js + Express + gRPC
+- **gRPC Server**: `src/grpc/grpc.server.ts` - Implements all RPC methods
+- **Ports**: HTTP (3000), gRPC (50051)
+- **AI Integration**: OpenAI API for semantic search and chat
 
-**Service Layer** (`src/services/`)
-- `auth.service.ts`: Handles GitHub token authentication
+**`packages/shared`** - Shared Types and Proto
+- **Proto Definitions**: `proto/analysis.proto` - gRPC service definitions
+- **Type System**: Zod schemas for validation
+- **Utilities**: Common helper functions
 
-**Configuration** (`src/config/`)
-- `security.ts`: Security settings and file restrictions
+### Communication Patterns
+
+**gRPC Methods**:
+1. **Unary RPC**: `learnCodebase` - Simple request/response
+2. **Server Streaming**:
+   - `analyzeCodebase` - Progress updates
+   - `searchCode` - Search results
+   - `analyzeDiff` - Diff analysis
+3. **Bidirectional Streaming**: `chatWithCode` - Interactive chat
 
 ### Key Technical Decisions
 
-- **Git Operations**: Uses `simple-git` library for all repository interactions
-- **File Pattern Matching**: `glob` package for efficient file discovery
-- **AI Integration**: OpenAI API for code analysis features
-- **TypeScript Configuration**: Strict mode enabled with all type checking flags
+- **NestJS v11**: Latest version for modern features and performance
+- **gRPC + HTTP/2**: Efficient binary protocol with streaming support
+- **Protocol Buffers**: Type-safe service definitions
+- **RxJS Observables**: Stream handling in NestJS
+- **SSE (Server-Sent Events)**: Web client streaming support
+- **Monorepo with npm workspaces**: Shared dependencies and coordinated builds
 
 ### Environment Variables
 
-Required environment variables (see `.env.example`):
+Required environment variables:
 - `OPENAI_API_KEY`: OpenAI API key for AI features
-- `GITHUB_TOKEN`: GitHub authentication token
-- Various security and configuration settings for file size limits, allowed paths, etc.
+- `GRPC_SERVER_URL`: gRPC server address (default: localhost:50051)
+- `PORT`: HTTP server port (local: 3001, aws: 3000)
+- `GRPC_PORT`: gRPC server port (default: 50051)
 
 ### Infrastructure Services
 
-The project includes Docker Compose configuration for:
-- **ChromaDB**: Vector database for embeddings
-- **Redis**: Caching layer
-- **PostgreSQL**: Metadata storage
-- **MinIO**: S3-compatible object storage
-- **Nginx**: Reverse proxy
+Docker Compose provides:
+- **ChromaDB**: Vector database for embeddings (port: 8000)
+- **Redis**: Caching layer (port: 6379)
+- **PostgreSQL**: Metadata storage (port: 5432)
+- **MinIO**: S3-compatible storage (port: 9000)
+- **Nginx**: Reverse proxy (port: 80)
 
 ## Development Notes
 
-- When adding new MCP tools, follow the existing pattern in `src/tools/learn-codebase.ts`
-- All tools should be registered in `src/server.ts` with proper input/output schemas
-- The project uses ES modules - ensure all imports include file extensions (`.js` in compiled code)
-- TypeScript strict mode is enabled - maintain type safety in all code
+### Adding New MCP Tools
+1. Define gRPC service in `packages/shared/proto/analysis.proto`
+2. Implement server handler in `packages/aws-api/src/grpc/grpc.server.ts`
+3. Add client method in `packages/local-mcp/src/grpc/grpc-client.service.ts`
+4. Register MCP tool in `packages/local-mcp/src/mcp/mcp.service.ts`
+
+### Best Practices
+- Use streaming for large data transfers or real-time updates
+- Implement proper error handling in gRPC streams
+- Follow NestJS module structure and dependency injection
+- Maintain type safety with Protocol Buffers and Zod schemas
+- Use npm workspaces commands for package-specific operations
