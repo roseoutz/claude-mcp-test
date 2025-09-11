@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+// Re-export all types
+export * from './git.js';
+export * from './analysis.js';
+export * from './mcp.js';
+export * from './config.js';
+export * from './errors.js';
+
+// Zod schemas for runtime validation
 export const CodebaseInfoSchema = z.object({
   repository: z.string(),
   branch: z.string(),
@@ -36,3 +44,29 @@ export const ApiResponseSchema = z.object({
 });
 
 export type ApiResponse = z.infer<typeof ApiResponseSchema>;
+
+// Additional Zod schemas for new types
+export const LearnCodebaseInputSchema = z.object({
+  repoPath: z.string().min(1),
+  branch: z.string().optional(),
+  includeTests: z.boolean().optional(),
+  maxFileSize: z.number().positive().optional(),
+  filePatterns: z.array(z.string()).optional(),
+  excludePatterns: z.array(z.string()).optional(),
+});
+
+export const AnalyzeDiffInputSchema = z.object({
+  repoPath: z.string().min(1),
+  baseBranch: z.string().min(1),
+  targetBranch: z.string().min(1),
+  includeStats: z.boolean().optional(),
+  contextLines: z.number().positive().optional(),
+});
+
+export const SearchCodeInputSchema = z.object({
+  query: z.string().min(1),
+  repoPath: z.string().optional(),
+  searchType: z.enum(['literal', 'regex', 'semantic']).optional(),
+  fileTypes: z.array(z.string()).optional(),
+  maxResults: z.number().positive().optional(),
+});
