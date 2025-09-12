@@ -3,6 +3,8 @@ import * as protoLoader from '@grpc/proto-loader';
 import { join } from 'path';
 import { OpenAI } from 'openai';
 import { Readable } from 'stream';
+import { AnalysisService } from '../services/analysis.service';
+import { StorageService } from '../services/storage.service';
 
 const PROTO_PATH = join(__dirname, '../../../shared/proto/analysis.proto');
 
@@ -22,6 +24,13 @@ const openai = new OpenAI({
 
 class AnalysisServiceImpl {
   private sessions: Map<string, any> = new Map();
+  private analysisService: AnalysisService;
+  private storageService: StorageService;
+
+  constructor() {
+    this.analysisService = new AnalysisService();
+    this.storageService = new StorageService();
+  }
 
   async learnCodebase(
     call: grpc.ServerUnaryCall<any, any>,
@@ -31,20 +40,15 @@ class AnalysisServiceImpl {
       const { repository_path, branch, file_patterns } = call.request;
       const sessionId = `session_${Date.now()}`;
       
-      this.sessions.set(sessionId, {
-        repository: repository_path,
-        branch,
-        patterns: file_patterns,
-        timestamp: new Date(),
-      });
+      // AnalysisService를 사용하여 실제 학습 수행
+      const result = await this.analysisService.startLearning(
+        sessionId, 
+        repository_path, 
+        branch, 
+        file_patterns
+      );
 
-      callback(null, {
-        success: true,
-        session_id: sessionId,
-        files_processed: 0,
-        total_size_bytes: 0,
-        message: 'Codebase learning initiated',
-      });
+      callback(null, result);
     } catch (error) {
       callback({
         code: grpc.status.INTERNAL,
@@ -73,28 +77,15 @@ class AnalysisServiceImpl {
         }
       }
 
+      // AnalysisService를 사용하여 실제 분석 수행
+      const analysisResult = await this.analysisService.analyzeCode(session_id, analysis_type);
+
       // 최종 결과 전송
       call.write({
         stage: 'complete',
         progress: 1.0,
         message: 'Analysis complete',
-        final_result: {
-          summary: `${analysis_type} analysis completed`,
-          findings: [
-            {
-              type: analysis_type,
-              severity: 'medium',
-              file_path: 'src/example.ts',
-              line_number: 42,
-              description: 'Example finding',
-              suggestion: 'Consider refactoring',
-            },
-          ],
-          statistics: {
-            total_files: 100,
-            issues_found: 5,
-          },
-        },
+        final_result: analysisResult.result,
       });
 
       call.end();
@@ -107,36 +98,13 @@ class AnalysisServiceImpl {
     try {
       const { session_id, query, semantic_search } = call.request;
       
-      if (semantic_search) {
-        // OpenAI 임베딩을 사용한 시맨틱 검색
-        const embedding = await openai.embeddings.create({
-          model: 'text-embedding-3-small',
-          input: query,
-        });
-
-        // 여기서는 예시로 몇 개의 결과를 스트리밍
-        for (let i = 0; i < 5; i++) {
-          call.write({
-            file_path: `src/file${i}.ts`,
-            line_number: i * 10,
-            code_snippet: `// Example code matching: ${query}`,
-            relevance_score: 0.95 - i * 0.1,
-            explanation: `This code is relevant because it contains ${query}`,
-          });
-          
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-      } else {
-        // 일반 텍스트 검색 결과 스트리밍
-        for (let i = 0; i < 3; i++) {
-          call.write({
-            file_path: `src/basic${i}.ts`,
-            line_number: i * 5,
-            code_snippet: `// Basic match for: ${query}`,
-            relevance_score: 0.8,
-            explanation: 'Text match found',
-          });
-        }
+      // AnalysisService를 사용하여 검색 수행
+      const results = await this.analysisService.searchCode(session_id, query, semantic_search);
+      
+      // 결과를 스트리밍으로 전송
+      for (const result of results) {
+        call.write(result);
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       call.end();
@@ -211,26 +179,18 @@ class AnalysisServiceImpl {
     try {
       const { session_id, base_branch, target_branch, include_impact_analysis } = call.request;
       
-      // Diff 분석 결과를 스트리밍
-      const files = ['src/app.ts', 'src/service.ts', 'src/controller.ts'];
+      // AnalysisService를 사용하여 Diff 분석 수행
+      const diffResults = await this.analysisService.analyzeDiff(
+        session_id, 
+        base_branch, 
+        target_branch, 
+        include_impact_analysis
+      );
       
-      for (const file of files) {
-        call.write({
-          file_path: file,
-          changes: [
-            {
-              type: 'modified',
-              line_number: 10,
-              before: 'const old = true;',
-              after: 'const new = false;',
-              explanation: 'Boolean value changed',
-            },
-          ],
-          impact_summary: include_impact_analysis ? 'Medium impact on system' : '',
-          affected_components: include_impact_analysis ? ['ComponentA', 'ComponentB'] : [],
-        });
-        
-        await new Promise(resolve => setTimeout(resolve, 300));
+      // 결과를 스트리밍으로 전송
+      for (const result of diffResults) {
+        call.write(result);
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       call.end();
