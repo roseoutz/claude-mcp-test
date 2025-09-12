@@ -51,15 +51,17 @@ export interface ImpactAnalysis {
   testingRequired: string[];
 }
 
+export interface SecurityIssue {
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  type: string;
+  message: string;
+  line?: number;
+  suggestion?: string;
+}
+
 export interface SecurityAnalysis {
   filePath: string;
-  issues: Array<{
-    type: string;
-    severity: 'low' | 'medium' | 'high' | 'critical';
-    line: number;
-    message: string;
-    recommendation: string;
-  }>;
+  issues: SecurityIssue[];
   score: number; // 0-100
 }
 

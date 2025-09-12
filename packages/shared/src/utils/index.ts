@@ -40,3 +40,5 @@ export {
   gitignoreToGlob,
   LANGUAGE_EXTENSIONS
 } from './git-utils.js';
+export { CacheKeys } from './cache-keys.js';
+export { PromptTemplates } from './ai-prompts.js';
