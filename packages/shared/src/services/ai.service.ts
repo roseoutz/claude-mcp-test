@@ -1,6 +1,28 @@
 /**
  * AI Service Implementation
- * OpenAI (임베딩) + Claude Opus 4.1 (생성)을 활용한 AI 서비스
+ * OpenAI (임베딩) + Claude 3.5 Sonnet (생성)을 활용한 AI 서비스
+ * 
+ * @description 
+ * 이 서비스는 코드베이스 분석을 위한 다양한 AI 기능을 제공합니다.
+ * OpenAI API를 통한 임베딩 생성과 Claude API를 통한 텍스트 생성을 결합하여
+ * 강력한 코드 분석 및 설명 기능을 제공합니다.
+ * 
+ * @architecture_pattern 
+ * - Hexagonal Architecture: IAIService 포트를 구현
+ * - Strategy Pattern: 실제 구현체와 Mock 구현체 제공
+ * - Decorator Pattern: 캐싱 기능 적용 (현재 주석 처리)
+ * 
+ * @ai_providers
+ * - OpenAI: text-embedding-ada-002 모델로 1536차원 벡터 임베딩 생성
+ * - Anthropic Claude: claude-3-5-sonnet-20241022 모델로 텍스트 생성
+ * 
+ * @key_features
+ * 1. 텍스트 임베딩: 코드를 벡터로 변환하여 유사성 검색 지원
+ * 2. 코드 분석: 복잡도, 컴포넌트, 의존성 분석
+ * 3. 코드 설명: 자연어로 코드의 동작과 목적 설명
+ * 4. 보안 분석: SQL 인젝션, XSS 등 보안 취약점 탐지
+ * 5. 리팩토링 제안: 코드 개선 방안 제시
+ * 6. 문서화: JSDoc, Markdown 형식의 문서 자동 생성
  */
 
 import OpenAI from 'openai';
@@ -12,12 +34,64 @@ import { config } from '../config/config-loader.js';
 import { Cacheable } from '../decorators/cache.decorator.js';
 import { CacheKeys } from '../utils/cache-keys.js';
 
+/**
+ * AI 서비스 구현 클래스
+ * 
+ * @class AIService
+ * @implements {IAIService}
+ * @description 
+ * OpenAI와 Claude API를 통합하여 코드베이스 분석을 위한 AI 기능을 제공합니다.
+ * 
+ * @responsibilities
+ * 1. API 클라이언트 관리: OpenAI와 Anthropic 클라이언트 초기화 및 관리
+ * 2. 임베딩 생성: 텍스트를 고차원 벡터로 변환
+ * 3. 코드 분석: 구조, 복잡도, 컴포넌트 분석
+ * 4. 자연어 생성: 코드 설명, 문서화, 개선 제안
+ * 5. 보안 분석: 취약점 탐지 및 보안 권고사항 제공
+ * 6. 에러 처리: API 호출 실패 시 fallback 동작
+ * 
+ * @error_handling_strategy
+ * - API 키 누락: 경고 로그 출력 후 더미 키로 초기화
+ * - API 호출 실패: 로깅 후 기본값 또는 랜덤 데이터 반환
+ * - 네트워크 오류: 재시도 없이 즉시 fallback (현재 버전)
+ * 
+ * @performance_considerations
+ * - 캐싱: 동일한 요청에 대한 중복 API 호출 방지 (데코레이터 패턴)
+ * - 토큰 제한: ANTHROPIC_MAX_TOKENS 설정을 통한 응답 길이 제어
+ * - 배치 처리: generateEmbeddings()로 여러 텍스트 동시 처리
+ */
 export class AIService implements IAIService {
+  /** @private OpenAI API 클라이언트 - 임베딩 생성 담당 */
   private openai: OpenAI;
+  
+  /** @private Anthropic Claude API 클라이언트 - 텍스트 생성 담당 */
   private anthropic: Anthropic;
+  
+  /** @private Claude API 요청 시 최대 토큰 수 제한 */
   private maxTokens: number;
+  
+  /** @private 캐시 서비스 인스턴스 (선택적) */
   private cacheService?: any;
 
+  /**
+   * AIService 생성자
+   * 
+   * @param {string} [openaiKey] - OpenAI API 키 (선택적, 환경변수 OPENAI_API_KEY 사용 가능)
+   * @param {string} [anthropicKey] - Anthropic API 키 (선택적, 환경변수 ANTHROPIC_API_KEY 사용 가능)
+   * 
+   * @description 
+   * AI 서비스를 초기화하고 OpenAI와 Anthropic API 클라이언트를 설정합니다.
+   * API 키가 제공되지 않으면 환경변수에서 읽어오며, 그것도 없으면 더미 키를 사용합니다.
+   * 
+   * @initialization_process
+   * 1. OpenAI 클라이언트 초기화 (임베딩용)
+   * 2. Anthropic 클라이언트 초기화 (텍스트 생성용)  
+   * 3. 최대 토큰 수 설정 (ANTHROPIC_MAX_TOKENS 환경변수)
+   * 4. API 키 유효성 경고 (키 누락 시)
+   * 
+   * @fallback_behavior
+   * API 키가 없어도 서비스는 초기화되며, 실제 API 호출 시에만 에러 처리됩니다.
+   */
   constructor(openaiKey?: string, anthropicKey?: string) {
     // OpenAI for embeddings
     const oaiKey = openaiKey || config.get('OPENAI_API_KEY');
@@ -46,6 +120,34 @@ export class AIService implements IAIService {
 
   /**
    * 텍스트 임베딩 생성
+   * 
+   * @param {string} text - 임베딩할 텍스트 (코드 블록, 주석, 문서 등)
+   * @returns {Promise<number[]>} 1536차원 임베딩 벡터
+   * 
+   * @description 
+   * OpenAI의 text-embedding-ada-002 모델을 사용하여 텍스트를 
+   * 1536차원의 숫자 벡터로 변환합니다. 이 벡터는 유사성 검색과 
+   * 의미적 검색에 사용됩니다.
+   * 
+   * @use_cases
+   * - 코드 블록 간 유사성 검색
+   * - 의미 기반 코드 검색 
+   * - 코드베이스 클러스터링
+   * - 중복 코드 탐지
+   * 
+   * @performance_notes
+   * - 캐싱 가능: 동일한 텍스트에 대해 동일한 벡터 반환
+   * - API 호출 비용: OpenAI 임베딩 API 요금 적용
+   * 
+   * @error_fallback
+   * API 호출 실패 시 1536차원의 랜덤 벡터를 반환합니다.
+   * 
+   * @example
+   * ```typescript
+   * const aiService = new AIService();
+   * const embedding = await aiService.generateEmbedding("function add(a, b) { return a + b; }");
+   * console.log(embedding.length); // 1536
+   * ```
    */
   async generateEmbedding(text: string): Promise<number[]> {
     try {
@@ -683,6 +785,35 @@ Format each suggestion as a separate line starting with "- "`;
 
 /**
  * Mock AI Service for testing/development
+ * 
+ * @class MockAIService  
+ * @implements {IAIService}
+ * @description 
+ * 실제 AI API를 호출하지 않고 결정적인 결과를 반환하는 모의 AI 서비스입니다.
+ * 개발, 테스트, 데모 환경에서 사용되며, API 키나 네트워크 연결 없이도 동작합니다.
+ * 
+ * @use_cases
+ * 1. 단위 테스트: 일관된 결과로 테스트 케이스 작성
+ * 2. 개발 환경: API 키 없이도 개발 가능  
+ * 3. 오프라인 데모: 네트워크 연결 없이 기능 시연
+ * 4. CI/CD 파이프라인: 외부 의존성 없는 자동화 테스트
+ * 
+ * @deterministic_behavior
+ * - 동일한 입력에 대해 항상 동일한 출력 보장
+ * - 텍스트 길이 기반 시드를 사용한 재현 가능한 랜덤성
+ * - 실제 API와 유사한 응답 형식 유지
+ * 
+ * @mock_strategies  
+ * - 임베딩: 사인 함수 기반 결정적 벡터 생성
+ * - 코드 분석: 코드 길이 기반 복잡도 계산
+ * - 보안 분석: 정규식 패턴 매칭으로 취약점 탐지
+ * - 텍스트 생성: 템플릿 기반 응답 생성
+ * 
+ * @testing_advantages
+ * - 빠른 실행 속도 (API 호출 없음)
+ * - 일관된 결과 (테스트 안정성)
+ * - 비용 절약 (API 요금 없음)
+ * - 오프라인 동작 (네트워크 불필요)
  */
 export class MockAIService implements IAIService {
   async generateEmbedding(text: string): Promise<number[]> {

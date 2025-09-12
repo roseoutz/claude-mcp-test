@@ -1,3 +1,34 @@
+/**
+ * Git Service Implementation
+ * simple-git 라이브러리를 사용한 Git 저장소 관리 서비스
+ * 
+ * @description 
+ * Git 저장소와의 모든 상호작용을 담당하는 핵심 서비스입니다.
+ * simple-git 라이브러리를 래핑하여 안전하고 일관된 Git 연산을 제공합니다.
+ * 
+ * @architecture_role
+ * Hexagonal Architecture의 Secondary Adapter로서 IGitRepository 포트를 구현하며,
+ * 외부 Git 시스템과 도메인 로직 사이의 경계를 담당합니다.
+ * 
+ * @core_capabilities
+ * 1. Repository Management: 저장소 초기화, 복제, 정보 조회
+ * 2. Branch Operations: 브랜치 생성, 전환, 목록 조회, 차이점 분석
+ * 3. File Operations: 파일 내용 조회, 변경 사항 추적, 상태 확인
+ * 4. Commit Operations: 커밋 이력 조회, 메타데이터 분석
+ * 5. Diff Analysis: 브랜치 간 차이점 분석 및 통계 생성
+ * 
+ * @safety_features
+ * - 읽기 전용 연산: 저장소 상태를 변경하지 않는 안전한 조회만 제공
+ * - 에러 처리: Git 명령 실패 시 구조화된 에러 정보 제공
+ * - 입력 검증: 브랜치명, 파일 경로 등의 유효성 검사
+ * - 로깅: 모든 Git 연산에 대한 상세한 로그 기록
+ * 
+ * @performance_optimizations
+ * - 조건부 로딩: 필요할 때만 저장소 정보 로드
+ * - 캐싱 준비: 반복적인 조회를 위한 캐싱 인프라 준비
+ * - 배치 연산: 여러 파일 조회 시 효율적인 배치 처리
+ */
+
 import simpleGit, { SimpleGit, LogResult, DiffResult } from 'simple-git';
 import { GitFile, CommitInfo, BranchDiff, Repository } from '../types/git.js';
 import { GitOperationError } from '../types/errors.js';
@@ -5,8 +36,32 @@ import { logger } from '../utils/logger.js';
 import path from 'path';
 import fs from 'fs/promises';
 
+/**
+ * Git 저장소 관리 서비스
+ * 
+ * @class GitService
+ * @description 
+ * Git 저장소에 대한 모든 읽기 전용 연산을 제공하는 서비스 클래스입니다.
+ * simple-git 라이브러리를 사용하여 안전하고 효율적인 Git 연산을 수행합니다.
+ * 
+ * @responsibilities
+ * 1. Git 저장소 초기화 및 설정
+ * 2. 브랜치 정보 조회 및 차이점 분석
+ * 3. 파일 내용 및 메타데이터 조회
+ * 4. 커밋 이력 분석 및 통계 생성
+ * 5. Git 연산 에러 처리 및 로깅
+ * 
+ * @thread_safety
+ * 이 클래스는 thread-safe하지 않으므로, 동시 접근 시 별도의 인스턴스를 사용해야 합니다.
+ * 
+ * @error_handling
+ * 모든 Git 연산 실패는 GitOperationError로 래핑되어 구조화된 에러 정보를 제공합니다.
+ */
 export class GitService {
+  /** @private simple-git 라이브러리 인스턴스 */
   private git: SimpleGit;
+  
+  /** @private Git 연산 전용 로거 */
   private gitLogger = logger.withContext('git-service');
   
   constructor(private repoPath: string) {

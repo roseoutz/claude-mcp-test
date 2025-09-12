@@ -1,6 +1,13 @@
 /**
  * MCP Server Implementation
  * Model Context Protocol 서버 구현
+ * 
+ * 이 서버는 Claude Code와 JSON-RPC 통신을 통해 코드베이스 분석 도구들을 제공합니다.
+ * STDIO 전송을 통해 Claude Code로부터 요청을 받고, 적절한 도구를 실행하여 결과를 반환합니다.
+ * 
+ * @architecture Hexagonal Architecture 패턴을 따르며, 도메인 서비스들을 orchestrate합니다
+ * @transport STDIO (표준 입출력)을 통한 JSON-RPC 2.0 프로토콜
+ * @features 코드베이스 학습, 브랜치 diff 분석, 기능 설명, 영향도 분석
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -27,11 +34,45 @@ import {
 
 /**
  * MCP 서버 클래스
+ * 
+ * Claude Code와의 JSON-RPC 통신을 담당하는 핵심 서버 클래스입니다.
+ * 
+ * @class MCPServer
+ * @description 
+ * - JSON-RPC 2.0 프로토콜을 통해 Claude Code와 통신
+ * - 4개의 핵심 도구(learn_codebase, analyze_branch_diff, explain_feature, analyze_impact) 제공
+ * - STDIO 전송 계층을 통한 실시간 통신
+ * - 에러 처리 및 로깅 시스템 통합
+ * - 설정 검증 및 서비스 상태 모니터링
+ * 
+ * @responsibilities
+ * 1. MCP 프로토콜 준수: JSON-RPC 요청/응답 처리
+ * 2. 도구 등록 및 스키마 관리: 각 도구의 입력 스키마 정의
+ * 3. 요청 라우팅: 도구별 핸들러로 요청 전달
+ * 4. 에러 처리: 예외 상황 처리 및 복구
+ * 5. 생명주기 관리: 서버 시작/중지 및 정리 작업
  */
 export class MCPServer {
+  /** @private MCP SDK의 Server 인스턴스 - JSON-RPC 프로토콜 처리 담당 */
   private server: Server;
+  
+  /** @private 구조화된 로거 - 서버별 컨텍스트 포함 */
   private serverLogger = logger.withContext('mcp-server');
 
+  /**
+   * MCPServer 생성자
+   * 
+   * @description 
+   * 서버 인스턴스를 생성하고 기본 설정을 초기화합니다.
+   * MCP SDK의 Server 클래스를 래핑하여 도구별 비즈니스 로직을 연결합니다.
+   * 
+   * @process
+   * 1. 애플리케이션 설정 로드
+   * 2. MCP Server 인스턴스 생성
+   * 3. 도구 핸들러 등록
+   * 4. 에러 처리 시스템 설정
+   * 5. 초기화 로그 출력
+   */
   constructor() {
     // 서버 설정
     const mcpConfig = ApplicationConfig.getMCPServerConfig();
@@ -63,9 +104,26 @@ export class MCPServer {
 
   /**
    * 도구 핸들러 설정
+   * 
+   * @private
+   * @description 
+   * MCP 프로토콜에 따라 도구 목록 조회 및 도구 실행 핸들러를 등록합니다.
+   * 
+   * @handlers
+   * 1. ListToolsRequestSchema: Claude Code가 사용 가능한 도구 목록을 요청할 때 처리
+   * 2. CallToolRequestSchema: Claude Code가 특정 도구 실행을 요청할 때 처리
+   * 
+   * @tools_registered
+   * - learn_codebase: 코드베이스 분석 및 벡터 인덱싱
+   * - analyze_branch_diff: Git 브랜치 간 차이점 분석  
+   * - explain_feature: 기능/컴포넌트 상세 설명
+   * - analyze_impact: 코드 변경 영향도 분석
+   * 
+   * @json_rpc_flow
+   * Claude Code → JSON-RPC Request → MCPServer → Tool Handler → Domain Service → Response
    */
   private setupToolHandlers(): void {
-    // 도구 목록 핸들러
+    // 도구 목록 핸들러 - Claude Code가 지원되는 도구들을 조회할 때 호출
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       this.serverLogger.debug('Listing available tools');
       
@@ -214,7 +272,7 @@ export class MCPServer {
       return { tools };
     });
 
-    // 도구 실행 핸들러
+    // 도구 실행 핸들러 - Claude Code가 특정 도구의 실행을 요청할 때 호출
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       
@@ -266,6 +324,21 @@ export class MCPServer {
 
   /**
    * 에러 핸들링 설정
+   * 
+   * @private
+   * @description 
+   * 서버 레벨과 프로세스 레벨의 에러 처리를 설정합니다.
+   * 예상치 못한 오류 상황에서도 안정적인 서버 운영을 보장합니다.
+   * 
+   * @error_handling_levels
+   * 1. MCP Server Level: server.onerror 핸들러 등록
+   * 2. Process Level: unhandledRejection, uncaughtException 처리
+   * 3. Signal Level: SIGINT, SIGTERM 처리로 정상 종료 보장
+   * 
+   * @recovery_strategy
+   * - 일반 오류: 로깅 후 계속 운영
+   * - 치명적 오류: 로깅 후 프로세스 종료 (process.exit(1))
+   * - 정상 종료 신호: 정리 작업 후 프로세스 종료 (process.exit(0))
    */
   private setupErrorHandling(): void {
     // 서버 레벨 에러 핸들링
@@ -300,6 +373,26 @@ export class MCPServer {
 
   /**
    * 서버 시작
+   * 
+   * @public
+   * @description 
+   * MCP 서버를 시작하고 Claude Code와의 통신을 활성화합니다.
+   * STDIO 전송 계층을 통해 JSON-RPC 프로토콜 통신을 시작합니다.
+   * 
+   * @startup_process
+   * 1. 설정 검증 (ConfigValidator.validateStartup)
+   * 2. 서비스 상태 확인 (필수 서비스 가용성 체크)
+   * 3. STDIO 전송 계층 연결 (StdioServerTransport)
+   * 4. MCP 서버 연결 (server.connect)
+   * 5. 준비 상태 알림 (Claude Code가 인식할 수 있도록 stderr 출력)
+   * 
+   * @throws {Error} 서버 시작 실패 시 에러 발생
+   * 
+   * @example
+   * ```typescript
+   * const mcpServer = new MCPServer();
+   * await mcpServer.start(); // Claude Code와 통신 시작
+   * ```
    */
   async start(): Promise<void> {
     try {
@@ -336,6 +429,20 @@ export class MCPServer {
 
   /**
    * 서버 중지
+   * 
+   * @public
+   * @description 
+   * MCP 서버를 정상적으로 중지하고 리소스를 정리합니다.
+   * 진행 중인 작업이 있다면 완료를 기다린 후 중지합니다.
+   * 
+   * @cleanup_tasks
+   * - 활성 연결 해제
+   * - 메모리 리소스 정리  
+   * - 로그 버퍼 플러시
+   * - 임시 파일 정리 (필요시)
+   * 
+   * @graceful_shutdown
+   * 이 메서드는 graceful shutdown을 보장하여 데이터 손실을 방지합니다.
    */
   async stop(): Promise<void> {
     try {
@@ -349,6 +456,37 @@ export class MCPServer {
 
 /**
  * 서버 인스턴스 생성 및 시작 함수
+ * 
+ * @function startMCPServer
+ * @description 
+ * MCP 서버의 생성과 시작을 한 번에 처리하는 편의 함수입니다.
+ * 애플리케이션 진입점에서 간단하게 서버를 시작할 수 있습니다.
+ * 
+ * @workflow
+ * 1. MCPServer 인스턴스 생성
+ * 2. 서버 시작 (start() 메서드 호출)
+ * 3. 시작된 서버 인스턴스 반환
+ * 
+ * @returns {Promise<MCPServer>} 시작된 MCP 서버 인스턴스
+ * @throws {Error} 서버 생성 또는 시작 실패 시
+ * 
+ * @example
+ * ```typescript
+ * // main.ts
+ * import { startMCPServer } from './server/mcp-server.js';
+ * 
+ * async function main() {
+ *   try {
+ *     const server = await startMCPServer();
+ *     console.log('MCP Server started successfully');
+ *   } catch (error) {
+ *     console.error('Failed to start MCP Server:', error);
+ *     process.exit(1);
+ *   }
+ * }
+ * 
+ * main();
+ * ```
  */
 export async function startMCPServer(): Promise<MCPServer> {
   const server = new MCPServer();

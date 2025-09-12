@@ -1,6 +1,32 @@
 /**
  * Vector Store Service Implementation
  * ChromaDB와 인메모리 벡터 스토어 구현
+ * 
+ * @description 
+ * 코드베이스 임베딩을 저장하고 유사성 검색을 수행하는 벡터 데이터베이스 서비스입니다.
+ * ChromaDB(프로덕션용)와 InMemoryVectorStore(개발/테스트용) 두 가지 구현을 제공합니다.
+ * 
+ * @architecture_pattern
+ * - Strategy Pattern: IVectorStore 인터페이스를 통한 다중 구현체 지원
+ * - Factory Pattern: VectorStoreFactory를 통한 구현체 생성
+ * - Adapter Pattern: 외부 벡터 DB와 도메인 로직 사이의 어댑터
+ * 
+ * @vector_operations
+ * 1. Document Storage: 텍스트와 메타데이터를 벡터로 변환하여 저장
+ * 2. Similarity Search: 코사인 유사도 기반 의미적 검색
+ * 3. Batch Operations: 대량 문서 처리를 위한 배치 연산
+ * 4. Collection Management: 벡터 컬렉션 생성 및 관리
+ * 5. Metadata Filtering: 메타데이터 기반 검색 결과 필터링
+ * 
+ * @implementation_strategy
+ * - ChromaVectorStore: 외부 ChromaDB 인스턴스 연결 (현재 스텁 구현)
+ * - InMemoryVectorStore: 메모리 기반 벡터 저장 및 검색
+ * - VectorStoreFactory: 설정에 따른 적절한 구현체 선택
+ * 
+ * @performance_characteristics
+ * - ChromaDB: 대용량 데이터, 영구 저장, 분산 처리 지원
+ * - InMemory: 빠른 속도, 휘발성 저장, 개발/테스트 최적화
+ * - 벡터 차원: 1536 (OpenAI text-embedding-ada-002 모델 기준)
  */
 
 // import { ChromaApi } from 'chromadb'; // Temporarily disabled due to API compatibility issues
