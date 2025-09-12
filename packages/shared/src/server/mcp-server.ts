@@ -43,7 +43,11 @@ export class MCPServer {
         version: mcpConfig.version,
       },
       {
-        capabilities: mcpConfig.capabilities,
+        capabilities: {
+          tools: {},
+          resources: {},
+          prompts: {},
+        }
       }
     );
 
@@ -222,19 +226,19 @@ export class MCPServer {
 
         switch (name) {
           case 'learn_codebase':
-            result = await handleLearnCodebase(args);
+            result = await handleLearnCodebase(args as any);
             break;
           
           case 'analyze_branch_diff':
-            result = await handleAnalyzeDiff(args);
+            result = await handleAnalyzeDiff(args as any);
             break;
           
           case 'explain_feature':
-            result = await handleExplainFeature(args);
+            result = await handleExplainFeature(args as any);
             break;
           
           case 'analyze_impact':
-            result = await handleAnalyzeImpact(args);
+            result = await handleAnalyzeImpact(args as any);
             break;
           
           default:

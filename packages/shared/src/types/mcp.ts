@@ -69,10 +69,10 @@ export interface MCPResponse {
   jsonrpc: '2.0';
   id: string | number;
   result?: any;
-  error?: MCPError;
+  error?: MCPProtocolError;
 }
 
-export interface MCPError {
+export interface MCPProtocolError {
   code: number;
   message: string;
   data?: any;

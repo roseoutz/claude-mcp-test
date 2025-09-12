@@ -122,7 +122,7 @@ export class CodeAnalysisService {
     let totalComplexity = 0;
 
     analysis.files.forEach(file => {
-      stats.totalLines += file.lineCount;
+      stats.totalLines += file.linesOfCode;
       totalComplexity += file.complexity;
 
       // Language distribution
@@ -160,8 +160,8 @@ export class ImpactAnalysisService {
     componentGraph: ComponentGraph,
     fileAnalyses: Map<string, FileAnalysis>
   ): ImpactAnalysis {
-    const directImpact: string[] = [...changedFiles];
-    const indirectImpact: string[] = [];
+    const directImpact: CodeComponent[] = [];
+    const indirectImpact: CodeComponent[] = [];
     const affectedComponents: string[] = [];
 
     // Find directly affected components
@@ -170,11 +170,12 @@ export class ImpactAnalysisService {
       if (analysis) {
         analysis.components.forEach(component => {
           affectedComponents.push(component.id);
+          directImpact.push(component);
         });
       }
     });
 
-    // Find indirectly affected components and files
+    // Find indirectly affected components
     const visited = new Set<string>();
     const queue = [...affectedComponents];
 
@@ -190,8 +191,11 @@ export class ImpactAnalysisService {
           queue.push(dependentId);
           
           const component = componentGraph.getComponent(dependentId);
-          if (component && !indirectImpact.includes(component.filePath)) {
-            indirectImpact.push(component.filePath);
+          if (component) {
+            const isAlreadyIncluded = indirectImpact.some(c => c.id === component.id);
+            if (!isAlreadyIncluded) {
+              indirectImpact.push(component);
+            }
           }
         }
       });
@@ -226,18 +230,21 @@ export class ImpactAnalysisService {
     }
 
     return {
+      change: changedFiles.join(', '),
+      affectedFiles: changedFiles,
       directImpact,
       indirectImpact,
-      affectedComponents: Array.from(visited),
-      riskAssessment: {
-        level: riskLevel,
-        factors: riskFactors
-      },
+      riskLevel,
       suggestions: ImpactAnalysisService.generateSuggestions(
         riskLevel,
         riskFactors,
         cycles
-      )
+      ),
+      estimatedEffort: Math.max(1, Math.floor((directImpact.length + indirectImpact.length) / 2)),
+      testingRequired: [
+        ...changedFiles.map(file => `Unit tests for ${file}`),
+        ...indirectImpact.map(comp => `Integration tests for ${comp.name}`)
+      ]
     };
   }
 

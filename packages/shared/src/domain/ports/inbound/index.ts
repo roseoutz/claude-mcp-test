@@ -13,9 +13,9 @@ import type {
 } from '../../../types/mcp.js';
 import type { 
   CodebaseAnalysis, 
-  BranchDiff, 
   ImpactAnalysis 
 } from '../../../types/analysis.js';
+import type { BranchDiff } from '../../../types/git.js';
 
 /**
  * 코드베이스 학습 Use Case

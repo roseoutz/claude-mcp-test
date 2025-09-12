@@ -25,3 +25,18 @@ export {
   createStepGuideResponse,
   createStatsResponse
 } from './mcp-formatter.js';
+export {
+  detectLanguage,
+  isTestFile,
+  isConfigFile,
+  isDocumentFile,
+  isBinaryFile,
+  isCriticalFile,
+  formatFileSize,
+  calculateFileComplexity,
+  categorizeFilesByStatus,
+  normalizeFilePath,
+  extractCommitType,
+  gitignoreToGlob,
+  LANGUAGE_EXTENSIONS
+} from './git-utils.js';

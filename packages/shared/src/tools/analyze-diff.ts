@@ -236,12 +236,13 @@ function formatDiffSummary(diffResult: any): string {
   // 파일별 변경 사항
   summary += `📁 **Changed Files:**\n`;
   diffResult.files.forEach((file: any) => {
-    const statusIcon = {
+    const statusIconMap: Record<string, string> = {
       'added': '🆕',
       'modified': '✏️',
       'deleted': '🗑️',
       'renamed': '↔️'
-    }[file.status] || '📄';
+    };
+    const statusIcon = statusIconMap[file.status] || '📄';
     
     summary += `${statusIcon} \`${file.path}\` `;
     

@@ -294,14 +294,15 @@ function formatImpactSummary(analysis: any): string {
   let text = `# 📊 Impact Analysis Summary\n\n`;
   
   // 위험도 아이콘
-  const riskIcons = {
+  const riskIconMap: Record<string, string> = {
     'low': '🟢',
     'medium': '🟡',
     'high': '🟠',
     'critical': '🔴'
   };
   
-  text += `## ${riskIcons[summary.riskLevel]} Risk Level: ${summary.riskLevel.toUpperCase()}\n\n`;
+  const riskIcon = riskIconMap[summary.riskLevel] || '⚪';
+  text += `## ${riskIcon} Risk Level: ${summary.riskLevel.toUpperCase()}\n\n`;
   
   text += `### 📈 Impact Statistics\n`;
   text += `• **Total Files Affected**: ${summary.totalAffectedFiles}\n`;
