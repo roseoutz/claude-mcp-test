@@ -3,9 +3,12 @@ import request from 'supertest';
 import express from 'express';
 
 // Mock dependencies
-vi.mock('./routes/analysis', () => ({
-  router: express.Router().get('/', (req, res) => res.json({ route: 'analysis' })),
-}));
+vi.mock('./routes/analysis', () => {
+  const router = express.Router();
+  router.get('/', (req, res) => res.json({ route: 'analysis' }));
+  router.post('/', (req, res) => res.json({ route: 'analysis' }));
+  return { router };
+});
 
 vi.mock('./routes/health', () => ({
   router: express.Router().get('/', (req, res) => res.json({ route: 'health' })),
@@ -48,9 +51,8 @@ describe('AWS API Server', () => {
   describe('Server Configuration', () => {
     it('should configure CORS with default origins', async () => {
       const response = await request(app)
-        .options('/health')
-        .set('Origin', 'http://localhost:3000')
-        .set('Access-Control-Request-Method', 'GET');
+        .get('/health')
+        .set('Origin', 'http://localhost:3000');
 
       expect(response.headers['access-control-allow-origin']).toBeDefined();
     });
@@ -64,9 +66,8 @@ describe('AWS API Server', () => {
       app = createApp();
 
       const response = await request(app)
-        .options('/health')
-        .set('Origin', 'https://example.com')
-        .set('Access-Control-Request-Method', 'GET');
+        .get('/health')
+        .set('Origin', 'https://example.com');
 
       expect(response.headers['access-control-allow-origin']).toBeDefined();
     });

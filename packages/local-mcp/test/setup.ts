@@ -1,5 +1,3 @@
-import 'reflect-metadata';
-
 // Global test setup
 beforeAll(() => {
   // Set test environment variables

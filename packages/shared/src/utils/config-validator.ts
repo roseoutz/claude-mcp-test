@@ -87,8 +87,13 @@ export class ConfigValidator {
     const vectorProvider = config.get('VECTOR_STORE_PROVIDER');
     available.push(`Vector Store (${vectorProvider})`);
     
-    if (vectorProvider !== 'chromadb' && !config.get('VECTOR_STORE_URL')) {
-      missing.push(`${vectorProvider} URL Configuration`);
+    // Elasticsearch는 기본 URL을 가지므로 체크하지 않음
+    if (vectorProvider === 'elasticsearch') {
+      // Elasticsearch URL 확인 (선택적)
+      const elasticsearchUrl = config.get('ELASTICSEARCH_URL');
+      if (!elasticsearchUrl) {
+        missing.push('Elasticsearch URL Configuration');
+      }
     }
 
     // 데이터베이스 확인

@@ -2,7 +2,6 @@
   "name": "@code-ai/local-mcp",
   "version": "1.0.0",
   "description": "Local MCP server for Claude Code integration",
-  "type": "module",
   "main": "dist/index.js",
   "bin": {
     "local-mcp": "dist/index.js"

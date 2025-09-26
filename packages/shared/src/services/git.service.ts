@@ -1,3 +1,5 @@
+import { promises as fs } from 'fs';
+
 /**
  * Git Service Implementation
  * simple-git 라이브러리를 사용한 Git 저장소 관리 서비스
@@ -34,7 +36,6 @@ import { GitFile, CommitInfo, BranchDiff, Repository } from '../types/git.js';
 import { GitOperationError } from '../types/errors.js';
 import { logger } from '../utils/logger.js';
 import path from 'path';
-import fs from 'fs/promises';
 
 /**
  * Git 저장소 관리 서비스
@@ -414,6 +415,112 @@ export class GitService {
       );
     }
   }
+
+  /**
+   * 저장소 복제 또는 업데이트
+   */
+  static async cloneOrUpdate(repoUrl: string, branch: string = 'main', targetDir?: string): Promise<string> {
+    try {
+      const repoName = path.basename(repoUrl, '.git');
+      const workingDir = targetDir || path.join(process.cwd(), 'temp', repoName);
+
+      // 디렉토리가 이미 존재하고 Git 저장소인 경우 업데이트
+      if (await fs.access(workingDir).then(() => true).catch(() => false)) {
+        const gitService = new GitService(workingDir);
+        if (await gitService.isRepository()) {
+          await gitService.git.fetch();
+          await gitService.git.checkout(branch);
+          await gitService.git.pull();
+          logger.info(`Updated repository: ${workingDir}`);
+          return workingDir;
+        }
+      }
+
+      // 부모 디렉토리 생성
+      await fs.mkdir(path.dirname(workingDir), { recursive: true });
+
+      // 저장소 복제
+      const git = simpleGit();
+      await git.clone(repoUrl, workingDir, ['--branch', branch, '--single-branch']);
+      logger.info(`Cloned repository: ${repoUrl} to ${workingDir}`);
+
+      return workingDir;
+    } catch (error) {
+      throw new GitOperationError(
+        `Failed to clone or update repository ${repoUrl}: ${error}`,
+        'cloneOrUpdate',
+        repoUrl
+      );
+    }
+  }
+
+  /**
+   * 브랜치 간 Diff 가져오기 - AnalysisService용
+   */
+  async getDiff(baseBranch: string, targetBranch: string): Promise<{
+    files: Array<{
+      path: string;
+      additions: Array<{ lineNumber: number; content: string }>;
+      deletions: Array<{ lineNumber: number; content: string }>;
+    }>;
+    summary: {
+      filesChanged: number;
+      additions: number;
+      deletions: number;
+    };
+  }> {
+    try {
+      const diffSummary = await this.git.diffSummary([`${baseBranch}...${targetBranch}`]);
+      const diffResult = await this.git.diff([`${baseBranch}...${targetBranch}`]);
+
+      const files = [];
+      const lines = diffResult.split('\n');
+      let currentFile: any = null;
+      let lineNumber = 0;
+
+      for (const line of lines) {
+        if (line.startsWith('diff --git')) {
+          if (currentFile) {
+            files.push(currentFile);
+          }
+          const pathMatch = line.match(/diff --git a\/(.*) b\/(.*)/);
+          currentFile = {
+            path: pathMatch ? pathMatch[2] : 'unknown',
+            additions: [],
+            deletions: [],
+          };
+        } else if (line.startsWith('@@')) {
+          const match = line.match(/@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
+          lineNumber = match ? parseInt(match[3]) : 0;
+        } else if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentFile?.additions.push({ lineNumber: lineNumber++, content: line.substring(1) });
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentFile?.deletions.push({ lineNumber: lineNumber, content: line.substring(1) });
+        } else if (currentFile && !line.startsWith('\\')) {
+          lineNumber++;
+        }
+      }
+
+      if (currentFile) {
+        files.push(currentFile);
+      }
+
+      return {
+        files,
+        summary: {
+          filesChanged: diffSummary.files.length,
+          additions: diffSummary.insertions,
+          deletions: diffSummary.deletions,
+        },
+      };
+    } catch (error) {
+      throw new GitOperationError(
+        `Failed to get diff: ${error}`,
+        'getDiff',
+        this.repoPath
+      );
+    }
+  }
 }
 
 /**
@@ -421,4 +528,16 @@ export class GitService {
  */
 export function createGitService(repoPath: string): GitService {
   return new GitService(repoPath);
+}
+
+/**
+ * 편의 메서드들을 포함한 GitService 확장
+ */
+export class ExtendedGitService extends GitService {
+  /**
+   * 저장소 복제 또는 업데이트
+   */
+  async cloneOrUpdate(repoUrl: string, branch: string = 'main'): Promise<string> {
+    return GitService.cloneOrUpdate(repoUrl, branch);
+  }
 }

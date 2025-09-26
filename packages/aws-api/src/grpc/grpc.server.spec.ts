@@ -19,6 +19,17 @@ vi.mock('@grpc/grpc-js', () => {
   return {
     Server: vi.fn(() => mockServer),
     ServerCredentials: mockCredentials,
+    loadPackageDefinition: vi.fn(() => ({
+      AnalysisService: {
+        service: {
+          learnCodebase: {},
+          analyzeCodebase: {},
+          searchCode: {},
+          chatWithCode: {},
+          analyzeDiff: {},
+        },
+      },
+    })),
     status: {
       INTERNAL: 13,
       INVALID_ARGUMENT: 3,

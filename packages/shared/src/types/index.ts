@@ -33,6 +33,15 @@ export const AnalysisRequestSchema = z.object({
   branch: z.string().optional(),
   analysisType: z.enum(['learn', 'diff', 'feature', 'impact']),
   options: z.record(z.any()).optional(),
+  // Additional fields for different request types
+  patterns: z.array(z.string()).optional(),
+  baseBranch: z.string().optional(),
+  targetBranch: z.string().optional(),
+  includeImpact: z.boolean().optional(),
+  sessionId: z.string().optional(),
+  query: z.string().optional(),
+  semantic: z.boolean().optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 export type AnalysisRequest = z.infer<typeof AnalysisRequestSchema>;

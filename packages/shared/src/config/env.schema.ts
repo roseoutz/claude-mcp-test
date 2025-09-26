@@ -47,7 +47,7 @@ export const envSchema = z.object({
   REDIS_DB: z.coerce.number().default(0),
   
   // 벡터 DB 설정
-  VECTOR_STORE_PROVIDER: z.string().toLowerCase().pipe(z.enum(['elasticsearch', 'chromadb', 'pinecone', 'weaviate', 'qdrant'])).default('elasticsearch'),
+  VECTOR_STORE_PROVIDER: z.string().toLowerCase().pipe(z.enum(['elasticsearch'])).default('elasticsearch'),
   VECTOR_STORE_URL: z.string().optional(),
   VECTOR_STORE_API_KEY: z.string().optional(),
   VECTOR_STORE_COLLECTION: z.string().default('codebase'),

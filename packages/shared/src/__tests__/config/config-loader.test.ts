@@ -127,7 +127,7 @@ describe('ConfigLoader', () => {
     });
 
     it('should return vector store configuration correctly', () => {
-      configLoader.set('VECTOR_STORE_PROVIDER', 'pinecone');
+      configLoader.set('VECTOR_STORE_PROVIDER', 'elasticsearch');
       configLoader.set('VECTOR_STORE_URL', 'https://api.pinecone.io');
       configLoader.set('VECTOR_DIMENSION', 768);
       

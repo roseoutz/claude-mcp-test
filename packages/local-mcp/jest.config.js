@@ -1,27 +1,19 @@
 /** @type {import('jest').Config} */
-export default {
-  preset: 'ts-jest/presets/default-esm',
+module.exports = {
+  preset: 'ts-jest',
   testEnvironment: 'node',
-  extensionsToTreatAsEsm: ['.ts'],
-  moduleNameMapping: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
-  },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   transform: {
-    '^.+\\.ts$': ['ts-jest', {
-      useESM: true,
-    }],
+    '^.+\\.ts$': 'ts-jest',
   },
   testMatch: [
     '**/__tests__/**/*.ts',
     '**/?(*.)+(spec|test).ts'
   ],
-  collectCoverage: true,
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/**/*.test.ts',
-    '!src/**/*.spec.ts'
-  ],
-  coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html']
+  collectCoverage: false, // Coverage는 일단 비활성화
+  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+  // 외부 모듈 mock
+  moduleNameMapper: {
+    '@code-ai/shared/(.*)': '<rootDir>/../shared/src/$1',
+  },
 };

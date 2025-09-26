@@ -2,16 +2,33 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { router } from './analysis';
-import type { AnalysisRequest } from '@code-ai/shared';
 
-// Mock OpenAI
-vi.mock('openai', () => ({
-  OpenAI: vi.fn(() => ({
-    embeddings: {
-      create: vi.fn().mockResolvedValue({
-        data: [{ embedding: [0.1, 0.2, 0.3] }],
-      }),
-    },
+// Mock services
+vi.mock('../services/analysis.service', () => ({
+  AnalysisService: vi.fn(() => ({
+    startLearning: vi.fn().mockResolvedValue({
+      message: 'Codebase learning initiated',
+      repository: '/test/repo',
+    }),
+    analyzeDiff: vi.fn().mockResolvedValue({
+      message: 'Diff analysis initiated',
+      repository: '/test/repo',
+    }),
+    searchCode: vi.fn().mockResolvedValue([
+      { file: 'test.ts', line: 10, content: 'test code' }
+    ]),
+    analyzeCode: vi.fn().mockResolvedValue({
+      analysis: 'Code analysis complete',
+    }),
+  })),
+}));
+
+vi.mock('../services/storage.service', () => ({
+  StorageService: vi.fn(() => ({
+    getSession: vi.fn().mockResolvedValue({
+      session_id: 'test-session',
+      created_at: new Date().toISOString(),
+    }),
   })),
 }));
 
@@ -26,7 +43,7 @@ describe('Analysis Routes', () => {
 
   describe('POST /learn', () => {
     it('should handle learn request successfully', async () => {
-      const analysisRequest: AnalysisRequest = {
+      const analysisRequest = {
         repository: '/test/repo',
         branch: 'main',
         patterns: ['**/*.ts'],
@@ -61,7 +78,7 @@ describe('Analysis Routes', () => {
     });
 
     it('should validate timestamp format', async () => {
-      const analysisRequest: AnalysisRequest = {
+      const analysisRequest = {
         repository: '/test/repo',
         branch: 'main',
         patterns: ['**/*.ts'],
@@ -79,7 +96,7 @@ describe('Analysis Routes', () => {
 
   describe('POST /diff', () => {
     it('should handle diff analysis request successfully', async () => {
-      const analysisRequest: AnalysisRequest = {
+      const analysisRequest = {
         repository: '/test/repo',
         baseBranch: 'main',
         targetBranch: 'feature',
@@ -105,11 +122,9 @@ describe('Analysis Routes', () => {
       // Simulate an error by sending invalid data
       const response = await request(app)
         .post('/api/analysis/diff')
-        .send(null) // Invalid JSON
+        .send('invalid json') // Invalid JSON
+        .set('Content-Type', 'application/json')
         .expect(400); // Express will return 400 for invalid JSON
-
-      // Note: Express handles JSON parsing errors differently
-      // so we might not reach our error handler
     });
 
     it('should return proper error response format', async () => {
@@ -117,7 +132,7 @@ describe('Analysis Routes', () => {
       const originalProcess = process.env.OPENAI_API_KEY;
       delete process.env.OPENAI_API_KEY;
 
-      const analysisRequest: AnalysisRequest = {
+      const analysisRequest = {
         repository: '/test/repo',
         baseBranch: 'main',
         targetBranch: 'feature',
@@ -158,13 +173,13 @@ describe('Analysis Routes', () => {
       const response = await request(app)
         .post('/api/analysis/learn')
         .send(incompleteRequest)
-        .expect(200); // Currently doesn't validate required fields
+        .expect(500); // Should fail validation
 
-      expect(response.body.success).toBe(true);
+      expect(response.body.success).toBe(false);
     });
 
     it('should handle large payloads', async () => {
-      const largeRequest: AnalysisRequest = {
+      const largeRequest = {
         repository: '/test/repo',
         branch: 'main',
         patterns: new Array(1000).fill('**/*.ts'),
@@ -183,7 +198,7 @@ describe('Analysis Routes', () => {
 
   describe('Response Format', () => {
     it('should return consistent response structure', async () => {
-      const analysisRequest: AnalysisRequest = {
+      const analysisRequest = {
         repository: '/test/repo',
         branch: 'main',
         patterns: ['**/*.ts'],
@@ -196,13 +211,12 @@ describe('Analysis Routes', () => {
 
       expect(response.body).toHaveProperty('success');
       expect(response.body).toHaveProperty('data');
-      expect(response.body.data).toHaveProperty('message');
-      expect(response.body.data).toHaveProperty('repository');
+      expect(response.body.data).toHaveProperty('session_id');
       expect(response.body.data).toHaveProperty('timestamp');
     });
 
     it('should include proper content-type headers', async () => {
-      const analysisRequest: AnalysisRequest = {
+      const analysisRequest = {
         repository: '/test/repo',
         branch: 'main',
         patterns: ['**/*.ts'],

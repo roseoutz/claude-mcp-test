@@ -17,7 +17,15 @@ export default function createTestApp(): express.Application {
   app.use('/health', healthRouter);
   app.use('/api/v1/analysis', analysisRouter);
 
-  app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Handle JSON parsing errors
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err instanceof SyntaxError && 'body' in err) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid JSON format',
+      });
+    }
+    
     console.error('Error:', err);
     res.status(500).json({
       success: false,

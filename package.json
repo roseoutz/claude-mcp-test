@@ -26,5 +26,8 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^9.1.1"
   }
 }
