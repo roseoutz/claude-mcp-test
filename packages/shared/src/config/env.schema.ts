@@ -47,12 +47,19 @@ export const envSchema = z.object({
   REDIS_DB: z.coerce.number().default(0),
   
   // 벡터 DB 설정
-  VECTOR_STORE_PROVIDER: z.string().toLowerCase().pipe(z.enum(['chromadb', 'pinecone', 'weaviate', 'qdrant'])).default('chromadb'),
+  VECTOR_STORE_PROVIDER: z.string().toLowerCase().pipe(z.enum(['elasticsearch', 'chromadb', 'pinecone', 'weaviate', 'qdrant'])).default('elasticsearch'),
   VECTOR_STORE_URL: z.string().optional(),
   VECTOR_STORE_API_KEY: z.string().optional(),
   VECTOR_STORE_COLLECTION: z.string().default('codebase'),
   VECTOR_DIMENSION: z.coerce.number().default(1536),
   VECTOR_SIMILARITY: z.string().toLowerCase().pipe(z.enum(['cosine', 'euclidean', 'dot'])).default('cosine'),
+
+  // Elasticsearch 설정
+  ELASTICSEARCH_URL: z.string().default('http://localhost:9200'),
+  ELASTICSEARCH_INDEX: z.string().default('codebase-index'),
+  ELASTICSEARCH_AUTH: z.coerce.boolean().default(false),
+  ELASTICSEARCH_USERNAME: z.string().optional(),
+  ELASTICSEARCH_PASSWORD: z.string().optional(),
   
   // 데이터베이스 설정
   DATABASE_TYPE: z.string().toLowerCase().pipe(z.enum(['postgres', 'mysql', 'sqlite', 'mongodb'])).default('sqlite'),

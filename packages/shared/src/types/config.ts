@@ -76,7 +76,7 @@ export interface CacheConfig {
 }
 
 export interface VectorStoreConfig {
-  provider: 'chromadb' | 'pinecone' | 'weaviate' | 'qdrant';
+  provider: 'elasticsearch' | 'chromadb' | 'pinecone' | 'weaviate' | 'qdrant';
   url?: string;
   apiKey?: string;
   collection?: string;

@@ -1,28 +1,37 @@
 version: '3.8'
 
 services:
-  # ChromaDB - Vector Database
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: codeai-chromadb
+  # Elasticsearch - Hybrid Search Engine
+  elasticsearch:
+    image: elasticsearch:8.11.3
+    container_name: codeai-elasticsearch
     ports:
-      - "8000:8000"
+      - "9200:9200"
+      - "9300:9300"
     environment:
-      - ALLOW_RESET=TRUE
-      - IS_PERSISTENT=TRUE
-      - ANONYMIZED_TELEMETRY=FALSE
-      - CHROMA_SERVER_AUTH_PROVIDER=${CHROMA_AUTH_PROVIDER:-}
-      - CHROMA_SERVER_AUTH_TOKEN=${CHROMA_AUTH_TOKEN:-}
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - cluster.routing.allocation.disk.threshold_enabled=false
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     volumes:
-      - chroma-data:/chroma/chroma
+      - elasticsearch-data:/usr/share/elasticsearch/data
     networks:
       - codeai-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
     restart: unless-stopped
+    mem_limit: 4g
 
   # Redis - Cache & Session Store
   redis:
@@ -102,7 +111,7 @@ services:
     networks:
       - codeai-network
     depends_on:
-      - chromadb
+      - elasticsearch
       - redis
       - postgres
       - minio
@@ -152,7 +161,7 @@ networks:
         - subnet: 172.20.0.0/16
 
 volumes:
-  chroma-data:
+  elasticsearch-data:
     driver: local
   redis-data:
     driver: local
