@@ -4,7 +4,7 @@ import { ElasticsearchVectorStore } from '@code-ai/shared/src/services/elasticse
 import { AIService } from '@code-ai/shared/src/services/ai.service';
 import { CodeGraphService } from '@code-ai/shared/src/services/code-graph.service';
 import { GitService } from '@code-ai/shared/src/services/git.service';
-import { IntelligentSearchService } from '@code-ai/shared/src/services/intelligent-search.service';
+import { IntelligentSearchService, IntelligentSearchResult } from '@code-ai/shared/src/services/intelligent-search.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { glob } from 'glob';
@@ -57,6 +57,16 @@ export class AnalysisService {
     MAJOR_ISSUE_DEBT_HOURS: 2,
     MINOR_ISSUE_DEBT_HOURS: 0.5
   };
+
+  // 파일 필터링 설정
+  private static readonly ALLOWED_EXTENSIONS = ['.kt', '.java'];
+  private static readonly EXCLUDED_PATHS = [
+    '/build/',
+    '/target/',
+    '/.gradle/',
+    '/generated/',
+    '.class'
+  ];
   private openai: OpenAI;
   private storage: StorageService;
   private vectorStore: ElasticsearchVectorStore;
@@ -217,9 +227,18 @@ export class AnalysisService {
           const content = await fs.readFile(fullPath, 'utf8');
           const language = this.detectLanguage(match);
 
-          // 파일 크기 제한 (1MB)
-          if (content.length > 1024 * 1024) {
-            console.warn(`File ${match} too large, skipping`);
+          // Kotlin/Java 전용 필터링
+          const ext = path.extname(match).toLowerCase();
+          if (!AnalysisService.ALLOWED_EXTENSIONS.includes(ext)) {
+            console.warn(`Non Kotlin/Java file ${match}, skipping`);
+            continue;
+          }
+
+          // 생성된 파일 제외 (빌드 결과물, IDE 생성 파일 등)
+          if (AnalysisService.EXCLUDED_PATHS.some(excludedPath =>
+            match.includes(excludedPath) || match.endsWith(excludedPath)
+          )) {
+            console.warn(`Generated file ${match}, skipping`);
             continue;
           }
 
@@ -282,13 +301,13 @@ export class AnalysisService {
 
         const results = await this.intelligentSearch.intelligentSearch(query, searchContext);
 
-        return results.map(result => ({
+        return results.map((result: IntelligentSearchResult) => ({
           file_path: result.metadata?.filePath || 'unknown',
           line_number: result.metadata?.lineStart || 1,
           code_snippet: this.truncateContent(result.content, 200),
           relevance_score: result.intelligenceScore || result.score,
           explanation: `Intelligent semantic match (${result.relevanceFactors?.semanticSimilarity?.toFixed(2)} semantic, ${result.relevanceFactors?.structuralRelevance?.toFixed(2)} structural)`,
-          related_nodes: result.relatedNodes?.slice(0, 3).map(n => n.id) || [],
+          related_nodes: result.relatedNodes?.slice(0, 3).map((n: { id: string; type: string; relation: string; strength: number }) => n.id) || [],
           graph_context: result.suggestedActions.join(', ') || 'none'
         }));
       } else {

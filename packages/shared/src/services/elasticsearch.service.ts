@@ -66,6 +66,32 @@ export interface ElasticsearchDocument {
       };
     };
 
+    // 의미적 메타데이터
+    semanticMetadata?: {
+      name: string;
+      elementType: 'class' | 'function' | 'method' | 'variable' | 'interface' | 'type';
+      description: string;           // AI가 생성한 자연어 설명
+      purpose: string;              // 주요 목적/역할
+      domain: string;               // 도메인 분류 (auth, payment, user, etc)
+      keywords: string[];           // 관련 키워드들
+      synonyms: string[];          // 동의어들
+      tags: string[];              // 분류 태그들
+      usagePatterns: string[];     // 사용 패턴들
+      relatedConcepts: string[];   // 관련 개념들
+      confidence: number;          // AI 생성 신뢰도 점수 (0-1)
+
+      // 추가 분석 정보
+      parameters?: Array<{
+        name: string;
+        type: string;
+        description: string;
+        keywords: string[];
+      }>;
+      returnType?: string;
+      complexity?: 'low' | 'medium' | 'high';
+      maintainability?: number;    // 유지보수성 점수
+    };
+
     [key: string]: any;
   };
 }
@@ -247,15 +273,92 @@ export class ElasticsearchVectorStore implements IVectorStore {
                 }
               }
             }
+          },
+
+          // 의미적 메타데이터 매핑
+          semanticMetadata: {
+            type: 'object' as const,
+            properties: {
+              name: { type: 'keyword' as const },
+              elementType: { type: 'keyword' as const },
+              description: {
+                type: 'text' as const,
+                analyzer: 'korean',
+                fields: {
+                  raw: { type: 'keyword' as const }
+                }
+              },
+              purpose: {
+                type: 'text' as const,
+                analyzer: 'korean',
+                fields: {
+                  raw: { type: 'keyword' as const }
+                }
+              },
+              domain: { type: 'keyword' as const },
+              keywords: {
+                type: 'text' as const,
+                analyzer: 'keyword',
+                fields: {
+                  search: {
+                    type: 'text' as const,
+                    analyzer: 'standard'
+                  }
+                }
+              },
+              synonyms: {
+                type: 'text' as const,
+                analyzer: 'keyword',
+                fields: {
+                  search: {
+                    type: 'text' as const,
+                    analyzer: 'standard'
+                  }
+                }
+              },
+              tags: { type: 'keyword' as const },
+              usagePatterns: {
+                type: 'text' as const,
+                analyzer: 'korean'
+              },
+              relatedConcepts: {
+                type: 'text' as const,
+                analyzer: 'keyword',
+                fields: {
+                  search: {
+                    type: 'text' as const,
+                    analyzer: 'standard'
+                  }
+                }
+              },
+              confidence: { type: 'float' as const },
+
+              // 추가 분석 정보
+              parameters: {
+                type: 'nested' as const,
+                properties: {
+                  name: { type: 'keyword' as const },
+                  type: { type: 'keyword' as const },
+                  description: {
+                    type: 'text' as const,
+                    analyzer: 'korean'
+                  },
+                  keywords: { type: 'keyword' as const }
+                }
+              },
+              returnType: { type: 'keyword' as const },
+              complexity: { type: 'keyword' as const },
+              maintainability: { type: 'float' as const }
+            }
           }
         }
       }
     }
   };
 
-  constructor(indexName?: string, logger?: ILogger) {
+  constructor(indexName?: string, loggerInstance?: ILogger) {
     this.indexName = indexName || config.get('ELASTICSEARCH_INDEX') || 'codebase-index';
-    this.logger = logger || require('../utils/logger.js').logger;
+    this.logger = loggerInstance || logger;
 
     const elasticsearchUrl = config.get('ELASTICSEARCH_URL') || 'http://localhost:9200';
     this.client = new Client({

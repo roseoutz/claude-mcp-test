@@ -1,16 +1,58 @@
+/**
+ * 서비스 모듈 통합 Export
+ * 지능형 코드 검색 시스템의 핵심 서비스들을 제공합니다
+ */
+
+// === 핵심 분석 서비스 ===
 export {
-  VectorStoreFactory,
-  type VectorSearchResult
-} from './vector-store.service.js';
+  IntelligentCodeAnalyzerService
+} from './intelligent-code-analyzer.service.js';
+
+export {
+  SemanticAnalyzerService,
+  type SemanticMetadata,
+  type CodeElement
+} from './semantic-analyzer.service.js';
+
+export {
+  AIDescriptionGeneratorService,
+  type AIDescriptionRequest,
+  type AIDescriptionResponse
+} from './ai-description-generator.service.js';
+
+// === 검색 및 매핑 서비스 ===
+export {
+  KeywordMappingService,
+  type KeywordMapping,
+  type SearchQueryExpansion
+} from './keyword-mapping.service.js';
 
 export {
   ElasticsearchVectorStore,
-  ElasticsearchVectorStoreFactory,
   type ElasticsearchDocument,
-  type HybridSearchResult
+  type SearchResult,
+  type SearchResponse,
+  type HybridSearchRequest
 } from './elasticsearch.service.js';
 
+// === 지원 서비스 ===
 export {
-  GitService,
-  createGitService
+  AIService
+} from './ai.service.js';
+
+export {
+  PromptManagerService,
+  type PromptTemplate,
+  type PromptData
+} from './prompt-manager.service.js';
+
+export {
+  CodeGraphService,
+  type GraphNode,
+  type GraphEdge,
+  type CodeGraph
+} from './code-graph.service.js';
+
+export {
+  GitService
 } from './git.service.js';

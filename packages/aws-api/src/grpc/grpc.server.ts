@@ -1,11 +1,14 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { OpenAI } from 'openai';
 import { Readable } from 'stream';
 import { AnalysisService } from '../services/analysis.service';
 import { StorageService } from '../services/storage.service';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const PROTO_PATH = join(__dirname, '../../../shared/proto/analysis.proto');
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
