@@ -5,7 +5,7 @@
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { AnalyzeImpactInput } from '../types/mcp.js';
-import { VectorStoreFactory } from '../services/vector-store.service.js';
+import { ElasticsearchVectorStore } from '../services/elasticsearch.service.js';
 import { logger } from '../utils/logger.js';
 import { 
   createTextResponse,
@@ -40,8 +40,8 @@ export async function handleAnalyzeImpact(args: AnalyzeImpactInput): Promise<Cal
     toolLogger.info(`Analyzing impact for ${affectedFiles.length} affected files`);
 
     // 벡터 스토어에서 관련 코드 검색
-    const vectorStore = VectorStoreFactory.createFromConfig(toolLogger);
-    await vectorStore.initialize('default');
+    const vectorStore = new ElasticsearchVectorStore('impact-analysis');
+    await vectorStore.initialize('impact-analysis');
 
     // 영향도 분석 수행
     const impactAnalysis = await performImpactAnalysis({

@@ -1,9 +1,9 @@
 /**
- * AI 기반 코드 설명 및 키워드 생성 서비스
- * OpenAI GPT를 사용하여 코드 요소의 자연어 설명과 키워드를 자동 생성
+ * 코드 설명 및 키워드 생성 서비스
+ * 임베딩 기반 유사성을 활용한 간단한 설명 생성 (LLM 없음)
  */
 
-import { AIService } from './ai.service';
+import { EmbeddingService } from './embedding.service';
 import { SemanticMetadata } from './semantic-analyzer.service';
 import { PromptManagerService } from './prompt-manager.service';
 

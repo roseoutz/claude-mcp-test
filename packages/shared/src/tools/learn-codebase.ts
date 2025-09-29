@@ -6,7 +6,7 @@
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { LearnCodebaseInput } from '../types/mcp.js';
 import { ApplicationConfig } from '../config/app.config.js';
-import { VectorStoreFactory } from '../services/vector-store.service.js';
+import { ElasticsearchVectorStore } from '../services/elasticsearch.service.js';
 import { logger } from '../utils/logger.js';
 import { 
   createTextResponse, 
@@ -70,7 +70,7 @@ export async function handleLearnCodebase(args: LearnCodebaseInput): Promise<Cal
     toolLogger.info(`Found ${files.length} files to process`);
 
     // 벡터 스토어 초기화
-    const vectorStore = VectorStoreFactory.createFromConfig(toolLogger);
+    const vectorStore = new ElasticsearchVectorStore(`codebase_${generateCollectionId(repoPath)}`);
     await vectorStore.initialize(`codebase_${generateCollectionId(repoPath)}`);
 
     // 파일들을 청크 단위로 처리

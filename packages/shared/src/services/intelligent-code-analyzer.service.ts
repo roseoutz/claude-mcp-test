@@ -11,7 +11,7 @@ import { KeywordMappingService } from './keyword-mapping.service';
 import { ElasticsearchVectorStore, SearchResult, SearchResponse } from './elasticsearch.service';
 import { CodeGraphService } from './code-graph.service';
 import { PromptManagerService } from './prompt-manager.service';
-import { AIService } from './ai.service';
+import { EmbeddingService } from './embedding.service';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as glob from 'glob';
@@ -105,7 +105,7 @@ export class IntelligentCodeAnalyzerService {
   private readonly promptManager: PromptManagerService;
 
   constructor(
-    aiService: AIService,
+    embeddingService: EmbeddingService,
     vectorStore: ElasticsearchVectorStore,
     promptManager?: PromptManagerService
   ) {

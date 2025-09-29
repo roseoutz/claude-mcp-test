@@ -5,7 +5,7 @@
 
 import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { ExplainFeatureInput } from '../types/mcp.js';
-import { VectorStoreFactory } from '../services/vector-store.service.js';
+import { ElasticsearchVectorStore } from '../services/elasticsearch.service.js';
 import { logger } from '../utils/logger.js';
 import { 
   createTextResponse,
@@ -39,10 +39,8 @@ export async function handleExplainFeature(args: ExplainFeatureInput): Promise<C
     toolLogger.info(`Explaining feature: ${featureId}`);
 
     // 벡터 스토어에서 관련 정보 검색
-    const vectorStore = VectorStoreFactory.createFromConfig(toolLogger);
-    
-    // 기본 컬렉션에서 검색 (실제로는 여러 컬렉션을 검색해야 할 수 있음)
-    await vectorStore.initialize('default');
+    const vectorStore = new ElasticsearchVectorStore('feature-explanation');
+    await vectorStore.initialize('feature-explanation');
     
     const searchResults = await vectorStore.search(featureId, 10, {
       // 기능 관련 메타데이터로 필터링할 수 있음

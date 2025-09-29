@@ -37,8 +37,9 @@ export {
 
 // === 지원 서비스 ===
 export {
-  AIService
-} from './ai.service.js';
+  EmbeddingService,
+  MockEmbeddingService
+} from './embedding.service.js';
 
 export {
   PromptManagerService,
