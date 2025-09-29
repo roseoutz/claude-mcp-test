@@ -1,0 +1,28 @@
+{
+  "name": "acceptance-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@code-ai/shared": "workspace:*",
+    "@code-ai/aws-api": "workspace:*",
+    "@code-ai/local-mcp": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^1.2.2",
+    "@vitest/ui": "^1.2.2",
+    "@vitest/coverage-v8": "^1.2.2",
+    "typescript": "^5.3.3",
+    "testcontainers": "^10.7.2",
+    "supertest": "^6.3.4",
+    "@types/supertest": "^6.0.2",
+    "ws": "^8.16.0",
+    "@types/ws": "^8.5.10"
+  }
+}
