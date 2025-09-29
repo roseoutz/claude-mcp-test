@@ -1,0 +1,252 @@
+# 코드 분석 AI 프롬프트 템플릿
+# 수정하기 편하도록 YAML 형태로 관리
+
+system_prompts:
+  code_analyzer:
+    role: "당신은 코드 분석 전문가입니다."
+    instructions: |
+      주어진 코드를 분석하여 다음을 제공해주세요:
+      1. 자연스러운 한국어 설명
+      2. 주요 목적과 역할
+      3. 관련 키워드 (한국어 + 영어)
+      4. 동의어와 유사 표현
+      5. 사용 패턴과 컨텍스트
+      6. 관련 개념들
+
+      응답은 반드시 유효한 JSON 형태로만 제공하고, 추가 설명은 하지 마세요.
+
+  code_explainer:
+    role: "당신은 코드 설명 전문가입니다."
+    instructions: |
+      코드의 의미와 목적을 정확히 파악하여 개발자가 이해하기 쉽게 한국어로 설명합니다.
+      기술적 정확성과 명확성을 중시하며, 실용적인 관점에서 설명을 제공합니다.
+
+analysis_prompts:
+  class_analysis:
+    template: |
+      코드 분석 요청:
+
+      파일: {filePath}
+      클래스명: {name}
+      타입: 클래스
+
+      코드 컨텍스트:
+      ```typescript
+      {codeContext}
+      ```
+
+      이 클래스가:
+      - 어떤 책임과 역할을 가지는지
+      - 어떤 도메인/영역을 담당하는지
+      - 다른 클래스와 어떤 관계를 가지는지
+      - 주요 기능과 메서드들이 무엇인지
+      분석해주세요.
+
+      다음 JSON 형태로만 응답해주세요:
+      {{
+        "description": "이 클래스의 역할과 기능에 대한 자연스러운 한국어 설명 (2-3문장)",
+        "purpose": "주요 목적을 명확히 한 문장으로",
+        "keywords": ["관련", "키워드", "한국어", "english", "terms"],
+        "synonyms": ["동의어", "유사표현", "alternative", "terms"],
+        "usagePatterns": ["어떤 상황에서", "어떻게 사용되는지", "패턴 설명"],
+        "relatedConcepts": ["관련된", "개념", "기술", "패턴"],
+        "confidence": 0.85
+      }}
+
+  function_analysis:
+    template: |
+      코드 분석 요청:
+
+      파일: {filePath}
+      함수명: {name}
+      타입: 함수
+
+      코드 컨텍스트:
+      ```typescript
+      {codeContext}
+      ```
+
+      이 함수가:
+      - 어떤 작업을 수행하는지
+      - 입력과 출력이 무엇인지
+      - 어떤 상황에서 호출되는지
+      - 부작용(side effect)이 있는지
+      분석해주세요.
+
+      다음 JSON 형태로만 응답해주세요:
+      {{
+        "description": "이 함수의 역할과 기능에 대한 자연스러운 한국어 설명 (2-3문장)",
+        "purpose": "주요 목적을 명확히 한 문장으로",
+        "keywords": ["관련", "키워드", "한국어", "english", "terms"],
+        "synonyms": ["동의어", "유사표현", "alternative", "terms"],
+        "usagePatterns": ["어떤 상황에서", "어떻게 사용되는지", "패턴 설명"],
+        "relatedConcepts": ["관련된", "개념", "기술", "패턴"],
+        "confidence": 0.85
+      }}
+
+  method_analysis:
+    template: |
+      코드 분석 요청:
+
+      파일: {filePath}
+      메서드명: {name}
+      타입: 메서드
+
+      코드 컨텍스트:
+      ```typescript
+      {codeContext}
+      ```
+
+      이 메서드가:
+      - 클래스의 어떤 행동을 담당하는지
+      - 객체의 상태를 어떻게 변경하는지
+      - 다른 메서드와 어떤 관계인지
+      - 언제 호출되어야 하는지
+      분석해주세요.
+
+      다음 JSON 형태로만 응답해주세요:
+      {{
+        "description": "이 메서드의 역할과 기능에 대한 자연스러운 한국어 설명 (2-3문장)",
+        "purpose": "주요 목적을 명확히 한 문장으로",
+        "keywords": ["관련", "키워드", "한국어", "english", "terms"],
+        "synonyms": ["동의어", "유사표현", "alternative", "terms"],
+        "usagePatterns": ["어떤 상황에서", "어떻게 사용되는지", "패턴 설명"],
+        "relatedConcepts": ["관련된", "개념", "기술", "패턴"],
+        "confidence": 0.85
+      }}
+
+  variable_analysis:
+    template: |
+      코드 분석 요청:
+
+      파일: {filePath}
+      변수명: {name}
+      타입: 변수
+
+      코드 컨텍스트:
+      ```typescript
+      {codeContext}
+      ```
+
+      이 변수가:
+      - 어떤 데이터를 저장하는지
+      - 언제 사용되는지
+      - 어떤 범위에서 접근 가능한지
+      - 설정값인지 상태값인지
+      분석해주세요.
+
+      다음 JSON 형태로만 응답해주세요:
+      {{
+        "description": "이 변수의 역할과 기능에 대한 자연스러운 한국어 설명 (2-3문장)",
+        "purpose": "주요 목적을 명확히 한 문장으로",
+        "keywords": ["관련", "키워드", "한국어", "english", "terms"],
+        "synonyms": ["동의어", "유사표현", "alternative", "terms"],
+        "usagePatterns": ["어떤 상황에서", "어떻게 사용되는지", "패턴 설명"],
+        "relatedConcepts": ["관련된", "개념", "기술", "패턴"],
+        "confidence": 0.85
+      }}
+
+search_prompts:
+  query_enhancement:
+    template: |
+      사용자가 "{originalQuery}"라는 검색어로 코드를 찾고 있습니다.
+
+      다음을 JSON 형태로 제공해주세요:
+      {{
+        "intent": "사용자가 무엇을 찾으려고 하는지 의도 분석",
+        "expandedTerms": ["검색어를 확장한 관련 용어들"],
+        "synonyms": ["동의어들"],
+        "relatedConcepts": ["관련 개념들"],
+        "suggestedFilters": {{
+          "domains": ["추천 도메인"],
+          "elementTypes": ["추천 요소 타입"],
+          "complexity": ["추천 복잡도"]
+        }},
+        "confidence": 0.85
+      }}
+
+feedback_prompts:
+  explanation_improvement:
+    template: |
+      다음 코드 설명을 개선해주세요:
+
+      현재 설명: {currentDescription}
+      사용자 피드백: {userFeedback}
+
+      개선된 설명을 JSON 형태로 제공해주세요:
+      {{
+        "improvedDescription": "개선된 설명",
+        "improvementReason": "개선 이유",
+        "confidence": 0.85
+      }}
+
+settings:
+  ai_params:
+    temperature: 0.3      # 일관성을 위해 낮은 온도
+    max_tokens: 1000      # 충분한 토큰 수
+    top_p: 0.9           # 다양성과 정확성의 균형
+
+  validation:
+    required_fields:     # JSON 응답에 필수 포함 필드
+      - description
+      - purpose
+      - keywords
+      - confidence
+
+    confidence_threshold: 0.3  # 최소 신뢰도 점수
+
+  fallback:
+    description: "{name}는 {type}입니다."
+    purpose: "{type} 역할을 수행합니다"
+    keywords: ["{name}"]
+    confidence: 0.3
+
+# 키워드 확장을 위한 규칙
+keyword_rules:
+  patterns:
+    creation:
+      trigger: ["create", "add", "insert", "new", "make"]
+      keywords: ["생성", "추가", "삽입", "만들기", "구성"]
+      synonyms: ["build", "construct", "generate", "produce"]
+
+    modification:
+      trigger: ["update", "modify", "edit", "change"]
+      keywords: ["수정", "업데이트", "변경", "편집"]
+      synonyms: ["alter", "revise", "adjust", "transform"]
+
+    retrieval:
+      trigger: ["get", "find", "fetch", "search", "query"]
+      keywords: ["조회", "검색", "가져오기", "찾기"]
+      synonyms: ["retrieve", "lookup", "select", "obtain"]
+
+    deletion:
+      trigger: ["delete", "remove", "drop", "clear"]
+      keywords: ["삭제", "제거", "삭제하기"]
+      synonyms: ["destroy", "eliminate", "erase"]
+
+    validation:
+      trigger: ["validate", "check", "verify", "test"]
+      keywords: ["검증", "확인", "검사", "테스트"]
+      synonyms: ["confirm", "ensure", "inspect"]
+
+# 도메인별 전문 용어
+domain_terms:
+  authentication:
+    keywords: ["로그인", "인증", "권한", "토큰", "세션"]
+    english: ["login", "auth", "permission", "token", "session"]
+
+  user_management:
+    keywords: ["사용자", "회원", "프로필", "계정"]
+    english: ["user", "member", "profile", "account"]
+
+  payment:
+    keywords: ["결제", "지불", "거래", "청구서"]
+    english: ["payment", "billing", "transaction", "invoice"]
+
+  database:
+    keywords: ["데이터베이스", "쿼리", "테이블", "스키마"]
+    english: ["database", "query", "table", "schema"]
+
+  api:
+    keywords: ["API", "엔드포인트", "서비스", "인터페이스"]
+    english: ["endpoint", "service", "interface", "handler"]
