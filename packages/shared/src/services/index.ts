@@ -57,3 +57,21 @@ export {
 export {
   GitService
 } from './git.service.js';
+
+// === 대화형 서비스 ===
+export {
+  ConversationalCodeChatService,
+  type CodeChatContext,
+  type ChatResponse
+} from './conversational-code-chat.service.js';
+
+// === 영향도 분석 서비스 ===
+export {
+  EnhancedImpactAnalyzerService,
+  type CodeMetadata,
+  type ImpactAnalysisRequest,
+  type ImpactAnalysisResponse,
+  type ImpactAnalysisResult,
+  ArchitectureLayer,
+  ComplexityLevel
+} from './enhanced-impact-analyzer.service.js';
