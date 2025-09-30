@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { ApiResponse, AnalysisRequest } from '@code-ai/shared';
 import { router as analysisRouter } from './routes/analysis.js';
 import { router as healthRouter } from './routes/health.js';
+import { router as impactRouter } from './routes/impact-analysis.js';
 import { startGrpcServer } from './grpc/grpc.server.js';
 
 const app = express();
@@ -18,6 +20,7 @@ app.use(express.json());
 
 app.use('/health', healthRouter);
 app.use('/api/v1/analysis', analysisRouter);
+app.use('/api/v1/impact', impactRouter);
 
 app.use((err: Error, req: express.Request, res: express.Response<ApiResponse>, next: express.NextFunction) => {
   console.error('Error:', err);
