@@ -5,6 +5,7 @@
  */
 
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 
 export interface UniversalCodeMetadata {
   // 기본 구조 정보
@@ -28,6 +29,15 @@ export interface UniversalCodeMetadata {
     isDto: boolean;          // DTO/Schema/Type
     isTest: boolean;         // Test file
     isUtility: boolean;      // Utility/Helper
+  };
+
+  // Claude가 생성한 코드 설명
+  aiDescription?: {
+    purpose: string;        // 코드의 주요 목적
+    responsibilities: string[];  // 담당하는 책임들
+    criticalFeatures: string[];  // 중요한 기능들
+    dependencies: string[];      // 주요 의존성
+    impactAreas: string[];       // 영향을 줄 수 있는 영역
   };
 
   // Framework 특성
@@ -89,21 +99,46 @@ export interface ImpactAnalysisResult {
 
 export class UniversalImpactAnalyzer {
   private openai: OpenAI;
+  private anthropic: Anthropic | null = null;
+  private anthropicModel: string;
+  private anthropicMaxTokens: number;
+  private anthropicTemperature: number;
   private embeddingCache: Map<string, number[]> = new Map();
 
   constructor(apiKey?: string) {
     this.openai = new OpenAI({
       apiKey: apiKey || process.env.OPENAI_API_KEY || 'test-key'
     });
+
+    // Anthropic API 초기화 (필수)
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey || anthropicKey === 'your_anthropic_api_key_here') {
+      throw new Error(
+        'ANTHROPIC_API_KEY is required for code analysis. ' +
+        'Please set it in packages/aws-api/.env file'
+      );
+    }
+
+    this.anthropic = new Anthropic({
+      apiKey: anthropicKey
+    });
+
+    // Claude 모델 설정 (환경 변수에서 읽기, 기본값: claude-opus-4-1-20250805)
+    this.anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-opus-4-1-20250805';
+    this.anthropicMaxTokens = parseInt(process.env.ANTHROPIC_MAX_TOKENS || '1000');
+    this.anthropicTemperature = parseFloat(process.env.ANTHROPIC_TEMPERATURE || '0');
+
+    console.log(`Claude AI initialized with model: ${this.anthropicModel}`);
+    console.log(`Max tokens: ${this.anthropicMaxTokens}, Temperature: ${this.anthropicTemperature}`);
   }
 
   /**
-   * 코드 파일에서 범용 메타데이터 추출
+   * 코드 파일에서 범용 메타데이터 추출 (AI 분석 포함)
    */
-  extractMetadata(filePath: string, content: string): UniversalCodeMetadata {
+  async extractMetadata(filePath: string, content: string): Promise<UniversalCodeMetadata> {
     const language = this.detectLanguage(filePath, content);
 
-    const metadata: UniversalCodeMetadata = {
+    const basicMetadata: UniversalCodeMetadata = {
       fileName: filePath.split('/').pop() || '',
       filePath,
       language,
@@ -155,14 +190,21 @@ export class UniversalImpactAnalyzer {
       }
     };
 
-    return metadata;
+    // Claude AI를 사용한 고급 분석 추가 (필수)
+    const aiDescription = await this.generateAIDescription(filePath, content, basicMetadata);
+    if (!aiDescription) {
+      throw new Error(`Failed to generate AI description for ${filePath}`);
+    }
+    basicMetadata.aiDescription = aiDescription;
+
+    return basicMetadata;
   }
 
   /**
-   * 의미적으로 강화된 텍스트 생성
+   * 의미적으로 강화된 텍스트 생성 (AI 설명 포함)
    */
   createEnhancedEmbeddingText(code: string, metadata: UniversalCodeMetadata): string {
-    return `
+    let enhancedText = `
 ## File Context
 Language: ${metadata.language}
 Package: ${metadata.packageName || 'default'}
@@ -198,6 +240,21 @@ ${metadata.methods.slice(0, 10).map(m =>
 ## Code Summary
 ${code.substring(0, 2000)}
 `;
+
+    // AI 설명이 있으면 추가
+    if (metadata.aiDescription) {
+      enhancedText += `
+
+## AI Analysis (by Claude)
+Purpose: ${metadata.aiDescription.purpose}
+Responsibilities: ${metadata.aiDescription.responsibilities.join(', ')}
+Critical Features: ${metadata.aiDescription.criticalFeatures.join(', ')}
+Dependencies: ${metadata.aiDescription.dependencies.join(', ')}
+Impact Areas: ${metadata.aiDescription.impactAreas.join(', ')}
+`;
+    }
+
+    return enhancedText;
   }
 
   /**
@@ -214,7 +271,7 @@ ${code.substring(0, 2000)}
     const results: ImpactAnalysisResult[] = [];
 
     for (const file of codebase) {
-      const metadata = this.extractMetadata(file.path, file.content);
+      const metadata = await this.extractMetadata(file.path, file.content);
 
       // 필터링 적용
       if (request.filters) {
@@ -251,7 +308,10 @@ ${code.substring(0, 2000)}
 
   // === 유틸리티 메서드 ===
 
-  private detectLanguage(filePath: string, content: string): 'java' | 'kotlin' | 'python' | 'typescript' | 'javascript' | 'unknown' {
+  public detectLanguage(filePath: string, content: string): 'java' | 'kotlin' | 'python' | 'typescript' | 'javascript' | 'unknown' {
+    // 파일 경로가 없으면 unknown 반환
+    if (!filePath) return 'unknown';
+
     // 파일 확장자 기반
     if (filePath.endsWith('.java')) return 'java';
     if (filePath.endsWith('.kt') || filePath.endsWith('.kts')) return 'kotlin';
@@ -725,6 +785,158 @@ ${code.substring(0, 2000)}
     return methods.slice(0, 20); // Limit to 20 methods
   }
 
+  /**
+   * Claude AI를 사용하여 코드에 대한 상세한 설명 생성 (필수)
+   */
+  private async generateAIDescription(
+    filePath: string,
+    content: string,
+    basicMetadata: Partial<UniversalCodeMetadata>
+  ): Promise<UniversalCodeMetadata['aiDescription']> {
+    if (!this.anthropic) {
+      throw new Error('Claude AI is not initialized but is required for code analysis');
+    }
+
+    try {
+      // 코드 샘플 (처음 100줄과 메타데이터)
+      const codeSnippet = content.split('\n').slice(0, 100).join('\n');
+
+      const prompt = `분석할 코드 파일: ${filePath}
+언어: ${basicMetadata.language}
+클래스명: ${basicMetadata.className || 'N/A'}
+패키지/모듈: ${basicMetadata.packageName || basicMetadata.moduleName || 'N/A'}
+
+코드 샘플:
+\`\`\`${basicMetadata.language}
+${codeSnippet}
+\`\`\`
+
+위 코드를 분석하여 다음 정보를 JSON 형식으로 제공해주세요:
+{
+  "purpose": "이 코드의 주요 목적 (한 문장)",
+  "responsibilities": ["책임1", "책임2", ...],
+  "criticalFeatures": ["중요기능1", "중요기능2", ...],
+  "dependencies": ["의존성1", "의존성2", ...],
+  "impactAreas": ["영향범위1", "영향범위2", ...]
+}
+
+간결하고 명확하게 작성해주세요.`;
+
+      const response = await this.anthropic.messages.create({
+        model: this.anthropicModel,
+        max_tokens: this.anthropicMaxTokens,
+        temperature: this.anthropicTemperature,
+        messages: [{
+          role: 'user',
+          content: prompt
+        }]
+      });
+
+      const content = response.content[0];
+      if (content.type === 'text') {
+        try {
+          // JSON 파싱 시도
+          const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+          }
+        } catch (e) {
+          console.log('Failed to parse Claude response as JSON');
+        }
+      }
+    } catch (error) {
+      console.log('Claude AI analysis failed:', error);
+    }
+
+    return undefined;
+  }
+
+  public extractClasses(content: string): string[] {
+    const classes = [];
+
+    // Java/Kotlin classes
+    const javaKotlinMatches = content.match(/(?:public\s+)?(?:class|interface|enum|object)\s+(\w+)/g);
+    if (javaKotlinMatches) {
+      classes.push(...javaKotlinMatches.map(m => m.split(/\s+/).pop() || ''));
+    }
+
+    // Python classes
+    const pythonMatches = content.match(/class\s+(\w+)/g);
+    if (pythonMatches) {
+      classes.push(...pythonMatches.map(m => m.split(/\s+/).pop() || ''));
+    }
+
+    // TypeScript/JavaScript classes
+    const tsMatches = content.match(/(?:export\s+)?(?:class|interface)\s+(\w+)/g);
+    if (tsMatches) {
+      classes.push(...tsMatches.map(m => m.split(/\s+/).pop() || ''));
+    }
+
+    return [...new Set(classes)];
+  }
+
+  public extractFunctions(content: string): string[] {
+    const functions = [];
+
+    // Java methods
+    const javaMatches = content.match(/(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?\w+\s+(\w+)\s*\(/g);
+    if (javaMatches) {
+      functions.push(...javaMatches.map(m => {
+        const parts = m.split(/\s+/);
+        return parts[parts.length - 1].replace('(', '');
+      }));
+    }
+
+    // Kotlin functions
+    const kotlinMatches = content.match(/fun\s+(\w+)\s*\(/g);
+    if (kotlinMatches) {
+      functions.push(...kotlinMatches.map(m => m.match(/fun\s+(\w+)/)?.[1] || ''));
+    }
+
+    // Python functions
+    const pythonMatches = content.match(/def\s+(\w+)\s*\(/g);
+    if (pythonMatches) {
+      functions.push(...pythonMatches.map(m => m.match(/def\s+(\w+)/)?.[1] || ''));
+    }
+
+    // TypeScript/JavaScript functions
+    const tsMatches = content.match(/(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*(?::\s*\w+)?\s*=>)/g);
+    if (tsMatches) {
+      functions.push(...tsMatches.map(m => {
+        const funcMatch = m.match(/function\s+(\w+)/);
+        if (funcMatch) return funcMatch[1];
+        const arrowMatch = m.match(/(?:const|let|var)\s+(\w+)/);
+        return arrowMatch?.[1] || '';
+      }));
+    }
+
+    return [...new Set(functions)].filter(f => f);
+  }
+
+  public extractImports(content: string): string[] {
+    const imports = [];
+
+    // Java/Kotlin imports
+    const javaImports = content.match(/import\s+[\w.]+/g);
+    if (javaImports) {
+      imports.push(...javaImports.map(i => i.replace(/import\s+/, '')));
+    }
+
+    // Python imports
+    const pythonImports = content.match(/(?:from\s+[\w.]+\s+)?import\s+[\w.,\s]+/g);
+    if (pythonImports) {
+      imports.push(...pythonImports);
+    }
+
+    // TypeScript/JavaScript imports
+    const tsImports = content.match(/import\s+.*\s+from\s+['"][^'"]+['"]/g);
+    if (tsImports) {
+      imports.push(...tsImports.map(i => i.match(/from\s+['"]([^'"]+)['"]/)?.[1] || ''));
+    }
+
+    return [...new Set(imports)].filter(i => i);
+  }
+
   private countMethods(content: string, language: 'java' | 'kotlin' | 'python' | 'typescript' | 'javascript' | 'unknown'): number {
     if (language === 'java') {
       const matches = content.match(/(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?\w+\s+\w+\s*\(/g);
@@ -880,7 +1092,7 @@ ${code.substring(0, 2000)}
     return roles.length > 0 ? roles.join('\n') : 'General application component';
   }
 
-  private async generateEmbedding(text: string): Promise<number[]> {
+  public async generateEmbedding(text: string): Promise<number[]> {
     const cacheKey = text.substring(0, 100); // Simple cache key
 
     if (this.embeddingCache.has(cacheKey)) {
