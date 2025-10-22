@@ -1,0 +1,53 @@
+{
+  "customPrompt": "이 프로젝트는 Model Context Protocol (MCP) 기반 코드 AI 시스템입니다. 특히 다음 사항을 중점적으로 검토해주세요:\n- TypeScript 타입 안전성\n- gRPC 프로토콜 호환성\n- AI API 키 보안\n- 비동기 처리 및 에러 핸들링\n- 모노레포 패키지 간 의존성",
+  "criticalPaths": [
+    "packages/local-mcp/src/**",
+    "packages/aws-api/src/**",
+    "packages/shared/src/**",
+    ".github/workflows/**",
+    "docker-compose.yml",
+    "package.json"
+  ],
+  "excludePaths": [
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/test-*.js",
+    "**/*.md",
+    "node_modules/**",
+    "dist/**",
+    "build/**"
+  ],
+  "checklistItems": [
+    "TypeScript 타입 정의 및 타입 안전성 확인",
+    "환경 변수 및 API 키 관리 보안성 검토",
+    "에러 핸들링 및 예외 처리 로직 확인",
+    "gRPC 프로토콜 및 API 호환성 검증",
+    "비동기 코드의 Promise 처리 및 메모리 누수 확인",
+    "모노레포 패키지 간 의존성 방향 확인",
+    "테스트 커버리지 및 빌드 통과 여부 확인",
+    "성능 영향도 (데이터베이스 쿼리, API 호출 등)",
+    "Breaking Changes 여부 및 하위 호환성"
+  ],
+  "analysisCategories": {
+    "security": {
+      "enabled": true,
+      "weight": 10,
+      "keywords": ["auth", "token", "api key", "password", "secret", "credential"]
+    },
+    "performance": {
+      "enabled": true,
+      "weight": 8,
+      "keywords": ["query", "loop", "async", "await", "promise", "cache"]
+    },
+    "compatibility": {
+      "enabled": true,
+      "weight": 9,
+      "keywords": ["breaking", "api", "interface", "type", "schema"]
+    },
+    "quality": {
+      "enabled": true,
+      "weight": 7,
+      "keywords": ["error", "try", "catch", "test", "coverage"]
+    }
+  }
+}

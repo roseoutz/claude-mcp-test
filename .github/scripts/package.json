@@ -1,0 +1,19 @@
+{
+  "name": "pr-analyzer-scripts",
+  "version": "1.0.0",
+  "description": "AI-powered PR analysis scripts for GitHub Actions",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "analyze": "node analyze-pr.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "@octokit/rest": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "Code AI MCP Team",
+  "license": "MIT"
+}
