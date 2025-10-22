@@ -51,6 +51,9 @@ tmp/
 temp/
 *.tmp
 
+# Test results
+.github/scripts/test-result.md
+
 # OS files
 Thumbs.db
 desktop.ini
