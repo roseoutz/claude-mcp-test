@@ -130,6 +130,41 @@ async function getDiff() {
 }
 
 /**
+ * PR 본문에서 작성자가 입력한 정보 추출
+ */
+function extractAuthorInput(prBody) {
+  const input = {
+    coreChange: '',
+    checkPoints: [],
+    concerns: [],
+  };
+
+  if (!prBody) return input;
+
+  // "변경의 핵심" 추출
+  const coreMatch = prBody.match(/\*\*변경의 핵심:\*\*\s*(?:<!--.*?-->\s*)?([\s\S]*?)(?=\*\*특히 확인|$)/);
+  if (coreMatch && coreMatch[1].trim()) {
+    input.coreChange = coreMatch[1].trim().split('\n')[0];
+  }
+
+  // "특히 확인해야 할 부분" 추출
+  const checkMatch = prBody.match(/\*\*특히 확인해야 할 부분:\*\*\s*(?:<!--.*?-->\s*)?([\s\S]*?)(?=\*\*우려 사항|---|\*\*|$)/);
+  if (checkMatch && checkMatch[1].trim()) {
+    const points = checkMatch[1].trim().split('\n').filter(line => line.trim().startsWith('-'));
+    input.checkPoints = points.map(p => p.replace(/^-\s*/, '').trim()).filter(Boolean);
+  }
+
+  // "우려 사항" 추출
+  const concernMatch = prBody.match(/\*\*우려 사항:\*\*\s*(?:<!--.*?-->\s*)?([\s\S]*?)(?=---|\*\*|$)/);
+  if (concernMatch && concernMatch[1].trim()) {
+    const concerns = concernMatch[1].trim().split('\n').filter(line => line.trim().startsWith('-'));
+    input.concerns = concerns.map(c => c.replace(/^-\s*/, '').trim()).filter(Boolean);
+  }
+
+  return input;
+}
+
+/**
  * AI 분석 프롬프트 생성
  */
 function createAnalysisPrompt(pr, files, diff, config) {
@@ -149,34 +184,41 @@ function createAnalysisPrompt(pr, files, diff, config) {
 
   const codeBlockMarker = '```';
 
-  let prompt = `당신은 경험 많은 시니어 개발자이자 코드 리뷰 전문가입니다.
-다음 Pull Request의 변경사항을 분석하고 리뷰어가 중점적으로 확인해야 할 사항을 작성해주세요.
+  // 작성자 입력 정보 추출
+  const authorInput = extractAuthorInput(pr.body);
+
+  let prompt = `당신은 경험 많은 시니어 개발자입니다.
+Pull Request 변경사항을 요약하고 전체 그림을 그려주세요.
 
 ## 📋 PR 정보
 - **제목**: ${prTitle}
-- **Base 브랜치**: ${baseBranch}
-- **Head 브랜치**: ${headBranch}
-- **변경 통계**: ${files.length}개 파일, +${totalAdditions}줄/-${totalDeletions}줄
+- **Base**: ${baseBranch} / **Head**: ${headBranch}
+- **변경**: ${files.length}개 파일, +${totalAdditions}/-${totalDeletions}줄
 
-## 📁 변경된 파일 목록
+${authorInput.coreChange ? `## 💡 작성자가 알려준 정보 (중요!)
+
+**변경의 핵심**: ${authorInput.coreChange}
+${authorInput.checkPoints.length > 0 ? '\n**특히 확인해야 할 부분**:\n' + authorInput.checkPoints.map(p => `- ${p}`).join('\n') : ''}
+${authorInput.concerns.length > 0 ? '\n**우려 사항**:\n' + authorInput.concerns.map(c => `- ${c}`).join('\n') : ''}
+
+→ 위 정보를 분석에 적극 활용하세요!
+` : ''}
+## 📁 변경된 파일
 ${fileList}
 
-## 🔍 코드 변경 내용 (Diff)
+## 🔍 Diff
 ${codeBlockMarker}diff
 ${truncatedDiff}
 ${codeBlockMarker}
 
 ## 🎯 프로젝트 컨텍스트
-이 프로젝트는 Code AI MCP (Model Context Protocol) 시스템입니다:
-- **아키텍처**: Monorepo (npm workspaces)
-- **주요 패키지**:
-  - @code-ai/local-mcp: NestJS 기반 로컬 MCP 서버
-  - @code-ai/aws-api: Express 기반 AWS API 서버
-  - @code-ai/shared: 공유 타입 및 유틸리티
-- **기술 스택**: TypeScript, Node.js, gRPC, OpenAI API, Anthropic API, Elasticsearch
-- **주요 기능**: 코드베이스 분석, 영향도 분석, 시맨틱 검색
+Code AI MCP 시스템 (Monorepo):
+- @code-ai/local-mcp: NestJS MCP 서버
+- @code-ai/aws-api: Express API 서버
+- @code-ai/shared: 공유 타입
+- 기술: TypeScript, gRPC, OpenAI, Anthropic, Elasticsearch
 
-${config.customPrompt ? '\n## 📌 추가 컨텍스트\n' + config.customPrompt : ''}
+${config.customPrompt ? '\n' + config.customPrompt + '\n' : ''}
 
 ## 📊 분석 목적
 이 PR의 **변경 사항을 요약**하고 **전체 그림**을 그려주세요.
@@ -188,103 +230,41 @@ ${config.customPrompt ? '\n## 📌 추가 컨텍스트\n' + config.customPrompt 
 - ✅ 전체 맥락 이해
 - ⚠️ 코드 리뷰가 아닌 요약 제공
 
-## 📝 출력 형식 (반드시 이 형식을 따라주세요)
+## 📝 출력 형식
 
-### 📋 한눈에 보는 변경 사항
+### 📋 요약 (2-3문장)
 
-**이 PR은 무엇을 하나요?** (1-2문장 요약)
-> {전체 변경의 핵심을 한눈에 파악할 수 있도록}
+**변경 내용:**
 
-**변경 통계:**
-- 📁 변경 파일: {개수}개
-- ➕ 추가: {개수}줄 / ➖ 삭제: {개수}줄
-- 🏷️ 유형: feat / fix / refactor / docs 등
+
+**변경 통계:** {N}개 파일, +{N}/-{N}줄
 
 ---
 
-### 🗂️ 파일별 변경 요약
+### 🗂️ 카테고리별 변경
 
-> 변경된 파일들을 카테고리별로 그룹화하여 설명합니다.
+#### {카테고리명} (예: API 라우터 추가)
+| 파일 | 변경 | 내용 (1줄) |
+|------|------|------------|
+| path/to/file | ➕/📝/➖ | ... |
 
-#### 📂 {카테고리 1}: {카테고리명} (예: 라우터 변경)
-
-| 파일 | 변경 유형 | 주요 변경 내용 |
-|------|----------|---------------|
-| src/index.ts | 수정 ✏️ | {1줄 요약} |
-| routes/new.ts | 추가 ➕ | {1줄 요약} |
-| routes/old.ts | 삭제 ➖ | {1줄 요약} |
-
-**왜 이렇게 변경했나요?**
-- {카테고리 전체의 변경 이유 및 배경}
-
-**어떤 영향이 있나요?**
-- {이 변경으로 인한 시스템 영향}
-
-#### 📂 {카테고리 2}: {카테고리명} (예: 새로운 서비스 추가)
-
-| 파일 | 변경 유형 | 주요 변경 내용 |
-|------|----------|---------------|
-| services/elasticsearch.service.ts | 추가 ➕ | {1줄 요약} |
-
-**왜 이렇게 변경했나요?**
-- {변경 이유}
-
-**어떤 영향이 있나요?**
-- {영향 설명}
+**이유**: ...
+**영향**: ...
 
 ---
 
-### 🎯 이번 PR의 핵심 스토리
+### 💡 리뷰 참고사항
 
-> 변경 사항들이 어떻게 연결되는지, 전체 그림을 그려봅니다.
+**확인 포인트:**
+1. {파일}: {내용}
+2. {파일}: {내용}
 
-#### 변경의 흐름
-1. **{첫 번째 단계}**: {설명}
-   → 관련 파일: file1.ts, file2.ts
+**주의사항** (있다면):
+- {내용}
 
-2. **{두 번째 단계}**: {설명}
-   → 관련 파일: file3.ts
+**Breaking Changes**: ✅ 있음 / ❌ 없음
 
-3. **{세 번째 단계}**: {설명}
-   → 관련 파일: file4.ts
-
-#### 주요 의사결정
-- **{결정사항 1}**: {왜 이렇게 했는지}
-- **{결정사항 2}**: {대안 대비 장점}
-
----
-
-### 🔄 변경 사항 연관 다이어그램
-
-**Before → After 구조:**
-- [삭제] 분석 라우터 → [추가] 코드 분석 라우터
-- [삭제] 이전 서비스 → [추가] Elasticsearch 서비스
-- [추가] 코드 검색 라우터
-
-**주요 연관성:**
-- A 파일 변경 → B 파일에 영향
-- C 기능 추가 → D, E 파일 수정 필요
-
----
-
-### 💡 리뷰 시 참고사항
-
-> 코드 리뷰가 아닌, 리뷰 시 알아두면 좋은 정보
-
-#### 🎯 중점적으로 확인하면 좋은 부분
-1. **{파일명}**: {이 파일에서 특히 확인할 부분과 이유}
-2. **{파일명}**: {확인 포인트}
-
-#### ⚠️ 주의해서 봐야 할 부분 (있다면)
-- **{항목}**: {주의가 필요한 이유}
-
-#### ✅ Breaking Changes
-- ✅ 있음: {어떤 Breaking Change인지}
-- ❌ 없음
-
-#### 📦 의존성 변경
-- ✅ 있음: {추가/제거/변경된 패키지}
-- ❌ 없음
+**의존성 변경**: ✅ 있음 / ❌ 없음
 
 ---
 
@@ -296,30 +276,16 @@ ${config.customPrompt ? '\n## 📌 추가 컨텍스트\n' + config.customPrompt 
 
 </div>
 
-**중요 가이드라인 (반드시 준수)**:
+**가이드**:
+1. 간결하게: 각 파일 1줄, 카테고리 2-3문장
+2. 작성자 정보 우선 참고
+3. 파일을 의미있는 카테고리로 그룹화
+4. 코드 리뷰가 아닌 변경 요약에 집중
+5. 표 형식으로 시각화
 
-1. **요약 중심**: 코드 리뷰가 아닌, 변경 사항 요약에 집중
-2. **스토리텔링**: "무엇을", "왜", "어떻게" 바꿨는지 이야기로 전달
-3. **카테고리화**: 파일들을 의미있는 그룹으로 묶어서 설명
-4. **전체 그림**: 개별 파일보다 전체 변경의 맥락과 흐름 강조
-5. **간결성**: 각 파일당 1줄 요약, 카테고리당 2-3문장
-6. **연관성**: 파일 간 연결고리와 의존성 명시
-7. **시각화**: 가능하면 다이어그램이나 표로 시각화
-
-**각 섹션별 가이드**:
-- **한눈에 보는 변경**: PR 전체를 1-2문장으로 핵심만
-- **파일별 요약**: 기능/목적별로 그룹화 (파일 시스템 구조 아님)
-- **핵심 스토리**: 변경의 흐름을 1→2→3 순서로 설명
-- **연관 다이어그램**: Before/After 비교 또는 파일 간 관계도
-- **리뷰 참고사항**: 꼭 필요한 정보만 간단히 (체크리스트 X)
-
-**작성 시 주의사항**:
-- ❌ "이 파일 확인하세요", "저기 테스트하세요" (리뷰 지시)
-- ✅ "이 파일은 ~~을 위해 ~~하도록 변경", "~~와 연동"
-- ❌ 파일 하나하나 나열
-- ✅ 카테고리별 그룹화 및 요약
-- ❌ 코드 줄 번호, 상세한 구현 설명
-- ✅ 전체 맥락, 변경 이유, 영향 범위`;
+**주의**:
+- ✅ "이 파일은 XX를 위해 변경"
+- ❌ "이 파일 확인하세요"`;
 
   return prompt;
 }
