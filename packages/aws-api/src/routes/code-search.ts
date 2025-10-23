@@ -10,6 +10,7 @@ import { UniversalImpactAnalyzer } from '../services/universal-impact-analyzer.j
 import Anthropic from '@anthropic-ai/sdk';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { z } from 'zod';
 
 const router = express.Router();
 const esService = new ElasticsearchService();
@@ -17,11 +18,14 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!
 });
 
-interface SearchRequest {
-  query: string;
-  repositoryPath?: string;
-  maxResults?: number;
-}
+// Zod 스키마 정의
+const SearchRequestSchema = z.object({
+  query: z.string().min(1, 'Query is required').max(1000, 'Query too long'),
+  repositoryPath: z.string().optional(),
+  maxResults: z.number().int().min(1).max(100).optional().default(10),
+});
+
+type SearchRequest = z.infer<typeof SearchRequestSchema>;
 
 interface SearchResponse {
   answer: string;
@@ -38,14 +42,20 @@ interface SearchResponse {
  */
 router.post('/', async (req, res: express.Response<ApiResponse>) => {
   try {
-    const request: SearchRequest = req.body;
+    // 입력 유효성 검증
+    const validationResult = SearchRequestSchema.safeParse(req.body);
 
-    if (!request.query) {
+    if (!validationResult.success) {
+      const errorMessages = validationResult.error.errors.map(
+        err => `${err.path.join('.')}: ${err.message}`
+      );
       return res.status(400).json({
         success: false,
-        error: 'Query is required'
+        error: `Validation failed: ${errorMessages.join(', ')}`
       });
     }
+
+    const request = validationResult.data;
 
     console.log(`Processing search query: ${request.query}`);
 
