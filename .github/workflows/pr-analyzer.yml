@@ -54,7 +54,7 @@ jobs:
             // CodeRabbit 차단 라벨 추가
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
-              repo: context.repo.name,
+              repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               labels: ['ai-analysis-in-progress']
             });
@@ -92,7 +92,7 @@ jobs:
             try {
               await github.rest.issues.removeLabel({
                 owner: context.repo.owner,
-                repo: context.repo.name,
+                repo: context.repo.repo,
                 issue_number: context.payload.pull_request.number,
                 name: 'ai-analysis-in-progress'
               });
@@ -103,7 +103,7 @@ jobs:
             // AI 분석 완료 라벨 추가
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
-              repo: context.repo.name,
+              repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               labels: ['ai-analysis-complete', 'ready-for-coderabbit']
             });
@@ -119,7 +119,7 @@ jobs:
             // CodeRabbit은 새로운 활동을 감지하면 리뷰 시작
             await github.rest.pulls.createReview({
               owner: context.repo.owner,
-              repo: context.repo.name,
+              repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
               event: 'COMMENT',
               body: '🤖 AI 분석이 완료되었습니다. @coderabbitai 리뷰를 시작해주세요.'
