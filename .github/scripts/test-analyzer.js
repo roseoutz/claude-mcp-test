@@ -325,32 +325,47 @@ ${config.customPrompt ? '\n## 📌 추가 컨텍스트\n' + config.customPrompt 
 }
 
 /**
- * AI 분석 실행
+ * AI 분석 실행 (재시도 로직 포함)
  */
-async function analyzeWithAI(prompt, apiKey) {
+async function analyzeWithAI(prompt, apiKey, retries = 3) {
   console.log(`\n🤖 Claude AI로 분석 중...`);
+  console.log(`📊 프롬프트 길이: ${prompt.length}자`);
 
   const anthropic = new Anthropic({ apiKey });
 
-  try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4096,
-      temperature: 0.3,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        temperature: 0.3,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
 
-    const analysis = message.content[0].text;
-    console.log('✅ AI 분석 완료\n');
-    return analysis;
-  } catch (error) {
-    console.error('❌ AI 분석 중 오류 발생:', error.message);
-    throw error;
+      if (!message.content || message.content.length === 0) {
+        throw new Error('AI 응답이 비어있습니다.');
+      }
+
+      const analysis = message.content[0].text;
+      console.log(`✅ AI 분석 완료 (응답 길이: ${analysis.length}자)\n`);
+      return analysis;
+    } catch (error) {
+      const errorMsg = error.message || String(error);
+      console.error(`❌ AI 분석 실패 (시도 ${attempt}/${retries}):`, errorMsg);
+
+      if (attempt < retries) {
+        const waitTime = attempt * 2000; // 2초, 4초
+        console.log(`⏳ ${waitTime / 1000}초 후 재시도...\n`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        throw new Error(`AI 분석 실패 (${retries}회 시도): ${errorMsg}`);
+      }
+    }
   }
 }
 
@@ -373,46 +388,69 @@ async function main() {
 
   try {
     // 1. 설정 로드
-    console.log('📋 설정 로드 중...');
+    console.log('\n📂 1단계: 설정 로드');
     const config = loadConfig();
-    console.log('✅ 설정 로드 완료\n');
+    console.log('✅ 설정 로드 완료');
 
     // 2. Mock 데이터 표시
-    console.log('📦 테스트 데이터:');
+    console.log('\n📦 2단계: 테스트 데이터');
     console.log(`- PR 제목: ${mockPRData.title}`);
     console.log(`- 변경된 파일: ${mockPRData.files.length}개`);
-    console.log(`- Base: ${mockPRData.baseBranch} → Head: ${mockPRData.headBranch}\n`);
+    console.log(`- Base: ${mockPRData.baseBranch} → Head: ${mockPRData.headBranch}`);
+    console.log(`- Diff 크기: ${mockPRData.diff.length}자`);
 
     // 3. 프롬프트 생성
-    console.log('📝 AI 프롬프트 생성 중...');
+    console.log('\n📝 3단계: AI 프롬프트 생성');
     const prompt = createAnalysisPrompt(mockPRData, config);
-    console.log('✅ 프롬프트 생성 완료\n');
+    console.log(`✅ 프롬프트 생성 완료 (${prompt.length}자)`);
 
     // 프롬프트 미리보기 (선택사항)
     if (process.argv.includes('--show-prompt')) {
-      console.log('='.repeat(60));
+      console.log('\n' + '='.repeat(60));
       console.log('📄 생성된 프롬프트:\n');
       console.log(prompt);
-      console.log('\n' + '='.repeat(60) + '\n');
+      console.log('\n' + '='.repeat(60));
     }
 
     // 4. AI 분석
+    console.log('\n🤖 4단계: AI 분석 실행');
     const analysis = await analyzeWithAI(prompt, apiKey);
 
     // 5. 결과 출력
-    console.log('='.repeat(60));
+    console.log('\n' + '='.repeat(60));
     console.log('📊 AI 분석 결과:\n');
     console.log(analysis);
     console.log('\n' + '='.repeat(60));
 
     // 6. 결과를 파일로 저장
     const outputPath = path.join(__dirname, 'test-result.md');
-    fs.writeFileSync(outputPath, `# AI PR 분석 테스트 결과\n\n${analysis}`, 'utf8');
+    const resultContent = `# AI PR 분석 테스트 결과
+
+## 테스트 정보
+- 실행 시간: ${new Date().toISOString()}
+- PR 제목: ${mockPRData.title}
+- 변경 파일: ${mockPRData.files.length}개
+
+---
+
+${analysis}`;
+
+    fs.writeFileSync(outputPath, resultContent, 'utf8');
     console.log(`\n💾 결과가 저장되었습니다: ${outputPath}`);
 
     console.log('\n✅ 테스트 완료!\n');
   } catch (error) {
-    console.error('\n❌ 오류 발생:', error);
+    const errorMsg = error.message || String(error);
+    console.error('\n' + '='.repeat(60));
+    console.error('❌ 오류 발생:', errorMsg);
+    console.error('='.repeat(60));
+
+    // 스택 트레이스 출력 (디버깅용)
+    if (error.stack) {
+      console.error('\n스택 트레이스:');
+      console.error(error.stack);
+    }
+
     process.exit(1);
   }
 }

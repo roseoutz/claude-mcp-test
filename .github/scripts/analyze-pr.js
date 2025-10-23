@@ -36,10 +36,20 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const owner = process.env.REPO_OWNER;
 const repo = process.env.REPO_NAME;
-const prNumber = parseInt(process.env.PR_NUMBER);
+const prNumber = parseInt(process.env.PR_NUMBER, 10);
 const baseBranch = process.env.BASE_BRANCH || 'main';
 const headBranch = process.env.HEAD_BRANCH || '';
 const prTitle = process.env.PR_TITLE || '';
+
+// 환경변수로 전달된 diff와 files (GitHub Actions에서 제공)
+const prDiffFromEnv = process.env.PR_DIFF || null;
+const changedFilesFromEnv = process.env.CHANGED_FILES || null;
+
+// PR Number 유효성 검증
+if (isNaN(prNumber) || prNumber <= 0) {
+  console.error('❌ 유효하지 않은 PR_NUMBER:', process.env.PR_NUMBER);
+  process.exit(1);
+}
 
 /**
  * 설정 파일 로드
@@ -93,7 +103,14 @@ async function getPRInfo() {
  * Git diff 가져오기
  */
 async function getDiff() {
-  console.log(`\n🔍 Git diff 가져오는 중...`);
+  // 환경변수로 전달된 diff가 있으면 우선 사용 (GitHub Actions에서 제공)
+  if (prDiffFromEnv) {
+    console.log(`\n🔍 환경변수에서 Git diff 로드 (길이: ${prDiffFromEnv.length}자)`);
+    return prDiffFromEnv;
+  }
+
+  // 환경변수가 없으면 GitHub API로 가져오기 (fallback)
+  console.log(`\n🔍 GitHub API로 Git diff 가져오는 중...`);
 
   try {
     const { data: diff } = await octokit.rest.pulls.get({
@@ -107,7 +124,7 @@ async function getDiff() {
 
     return diff;
   } catch (error) {
-    console.error('❌ Diff를 가져오는 중 오류 발생:', error.message);
+    console.error('❌ Diff를 가져오는 중 오류 발생:', error.message || error);
     throw error;
   }
 }
@@ -308,30 +325,45 @@ ${config.customPrompt ? '\n## 📌 추가 컨텍스트\n' + config.customPrompt 
 }
 
 /**
- * AI 분석 실행
+ * AI 분석 실행 (재시도 로직 포함)
  */
-async function analyzeWithAI(prompt) {
+async function analyzeWithAI(prompt, retries = 3) {
   console.log(`\n🤖 Claude AI로 분석 중...`);
+  console.log(`📊 프롬프트 길이: ${prompt.length}자`);
 
-  try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4096,
-      temperature: 0.3,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: 4096,
+        temperature: 0.3,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
 
-    const analysis = message.content[0].text;
-    console.log('✅ AI 분석 완료');
-    return analysis;
-  } catch (error) {
-    console.error('❌ AI 분석 중 오류 발생:', error.message);
-    throw error;
+      if (!message.content || message.content.length === 0) {
+        throw new Error('AI 응답이 비어있습니다.');
+      }
+
+      const analysis = message.content[0].text;
+      console.log(`✅ AI 분석 완료 (응답 길이: ${analysis.length}자)`);
+      return analysis;
+    } catch (error) {
+      const errorMsg = error.message || String(error);
+      console.error(`❌ AI 분석 실패 (시도 ${attempt}/${retries}):`, errorMsg);
+
+      if (attempt < retries) {
+        const waitTime = attempt * 2000; // 2초, 4초, 6초
+        console.log(`⏳ ${waitTime / 1000}초 후 재시도...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        throw new Error(`AI 분석 실패 (${retries}회 시도): ${errorMsg}`);
+      }
+    }
   }
 }
 
@@ -342,29 +374,37 @@ async function updatePRBody(pr, analysis) {
   console.log(`\n📝 PR 본문 업데이트 중...`);
 
   const originalBody = pr.body || '';
+  const aiSectionMarker = '## 🤖 AI 코드 리뷰 (자동 생성)';
 
-  // "## 🤖 AI 분석 결과 (자동 생성)" 섹션을 찾아서 업데이트
-  const aiSectionMarker = '## 🤖 AI 분석 결과 (자동 생성)';
+  // 템플릿에서 사용하는 마커도 체크
+  const templateMarker = '## 🤖 AI 분석 결과 (자동 생성)';
+
   let newBody;
+  let markerToUse = aiSectionMarker;
 
-  if (originalBody.includes(aiSectionMarker)) {
+  // 어느 마커가 사용되었는지 확인
+  if (originalBody.includes(templateMarker)) {
+    markerToUse = templateMarker;
+  }
+
+  if (originalBody.includes(markerToUse)) {
     // 기존 AI 분석 섹션이 있으면 교체
-    const sections = originalBody.split(aiSectionMarker);
-    const beforeSection = sections[0];
+    const parts = originalBody.split(markerToUse);
+    const beforeSection = parts[0];
 
-    // 다음 ## 헤더가 나오기 전까지 또는 끝까지를 AI 섹션으로 간주
-    const remainingSections = sections.slice(1).join(aiSectionMarker);
-    const nextHeaderMatch = remainingSections.match(/\n## [^🤖]/);
+    // 다음 ## 헤더 찾기 (더 robust한 regex)
+    const afterMarker = parts.slice(1).join(markerToUse);
+    const nextHeaderMatch = afterMarker.match(/\n## (?!🤖)/);
 
     if (nextHeaderMatch) {
-      const afterSection = remainingSections.slice(nextHeaderMatch.index);
-      newBody = `${beforeSection}${aiSectionMarker}\n${analysis}\n\n${afterSection}`;
+      const afterSection = afterMarker.slice(nextHeaderMatch.index);
+      newBody = `${beforeSection}${markerToUse}\n\n${analysis}\n${afterSection}`;
     } else {
-      newBody = `${beforeSection}${aiSectionMarker}\n${analysis}`;
+      newBody = `${beforeSection}${markerToUse}\n\n${analysis}`;
     }
   } else {
     // AI 분석 섹션이 없으면 추가
-    newBody = `${originalBody}\n\n${aiSectionMarker}\n${analysis}`;
+    newBody = `${originalBody}\n\n${aiSectionMarker}\n\n${analysis}`;
   }
 
   try {
@@ -375,8 +415,19 @@ async function updatePRBody(pr, analysis) {
       body: newBody,
     });
     console.log('✅ PR 본문 업데이트 완료');
+    console.log(`📏 업데이트된 본문 길이: ${newBody.length}자`);
   } catch (error) {
-    console.error('❌ PR 업데이트 중 오류 발생:', error.message);
+    const errorMsg = error.message || String(error);
+    console.error('❌ PR 업데이트 중 오류 발생:', errorMsg);
+
+    // 에러 상세 정보 출력
+    if (error.status) {
+      console.error(`HTTP Status: ${error.status}`);
+    }
+    if (error.response) {
+      console.error(`Response:`, error.response.data);
+    }
+
     throw error;
   }
 }
@@ -390,27 +441,58 @@ async function main() {
 
   try {
     // 1. 설정 로드
+    console.log('\n📂 1단계: 설정 로드');
     const config = loadConfig();
 
     // 2. PR 정보 수집
+    console.log('\n📋 2단계: PR 정보 수집');
     const { pr, files } = await getPRInfo();
 
+    if (!files || files.length === 0) {
+      console.log('⚠️  변경된 파일이 없습니다. 분석을 건너뜁니다.');
+      return;
+    }
+
+    console.log(`📊 파일 수: ${files.length}개`);
+
     // 3. Diff 가져오기
+    console.log('\n🔍 3단계: Git diff 가져오기');
     const diff = await getDiff();
 
+    if (!diff || diff.length === 0) {
+      console.log('⚠️  Diff가 비어있습니다. 분석을 건너뜁니다.');
+      return;
+    }
+
+    console.log(`📏 Diff 크기: ${diff.length}자`);
+
     // 4. AI 프롬프트 생성
+    console.log('\n📝 4단계: AI 프롬프트 생성');
     const prompt = createAnalysisPrompt(pr, files, diff, config);
 
     // 5. AI 분석
+    console.log('\n🤖 5단계: AI 분석 실행');
     const analysis = await analyzeWithAI(prompt);
 
     // 6. PR 본문 업데이트
+    console.log('\n✏️  6단계: PR 본문 업데이트');
     await updatePRBody(pr, analysis);
 
     console.log('\n' + '='.repeat(60));
     console.log('✅ PR 분석 완료!\n');
+    console.log(`🔗 PR 확인: https://github.com/${owner}/${repo}/pull/${prNumber}`);
   } catch (error) {
-    console.error('\n❌ 오류 발생:', error);
+    const errorMsg = error.message || String(error);
+    console.error('\n' + '='.repeat(60));
+    console.error('❌ 오류 발생:', errorMsg);
+    console.error('='.repeat(60));
+
+    // 스택 트레이스 출력 (디버깅용)
+    if (error.stack) {
+      console.error('\n스택 트레이스:');
+      console.error(error.stack);
+    }
+
     process.exit(1);
   }
 }
