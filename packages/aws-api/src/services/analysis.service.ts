@@ -123,45 +123,66 @@ export class AnalysisService {
 
       let processedCount = 0;
       const totalFiles = files.length;
+      const failedFiles: string[] = [];
 
-      // 각 파일 처리 및 Elasticsearch에 저장
-      for (const fileInfo of files) {
-        try {
-          const embedding = await this.aiService.generateEmbedding(fileInfo.content);
+      // 배치 크기 설정 (API rate limit 고려)
+      const BATCH_SIZE = 10;
 
-          // 그래프 메타데이터 생성
-          const relevantNodes = Array.from(codeGraph.nodes.values()).filter(
-            node => node.filePath === fileInfo.path
-          );
+      // 파일을 배치로 나누어 병렬 처리
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE);
 
-          const graphMetadata = relevantNodes.length > 0
-            ? this.graphService.generateGraphMetadata(relevantNodes[0].id)
-            : undefined;
+        // 배치 내 파일들을 병렬로 처리
+        const batchResults = await Promise.allSettled(
+          batch.map(async (fileInfo) => {
+            const embedding = await this.aiService.generateEmbedding(fileInfo.content);
 
-          await this.vectorStore.addDocumentWithEmbedding(
-            `${sessionId}_${fileInfo.path}`,
-            fileInfo.content,
-            embedding,
-            {
-              sessionId,
-              filePath: fileInfo.path,
-              language: fileInfo.language,
-              repository,
-              branch,
-              size: fileInfo.content.length,
-              graphMetadata
-            }
-          );
+            // 그래프 메타데이터 생성
+            const relevantNodes = Array.from(codeGraph.nodes.values()).filter(
+              node => node.filePath === fileInfo.path
+            );
 
-          processedCount++;
+            const graphMetadata = relevantNodes.length > 0
+              ? this.graphService.generateGraphMetadata(relevantNodes[0].id)
+              : undefined;
 
-          // 진행 상황 로깅
-          if (processedCount % 10 === 0 || processedCount === totalFiles) {
-            console.log(`Processed ${processedCount}/${totalFiles} files`);
+            await this.vectorStore.addDocumentWithEmbedding(
+              `${sessionId}_${fileInfo.path}`,
+              fileInfo.content,
+              embedding,
+              {
+                sessionId,
+                filePath: fileInfo.path,
+                language: fileInfo.language,
+                repository,
+                branch,
+                size: fileInfo.content.length,
+                graphMetadata
+              }
+            );
+
+            return fileInfo.path;
+          })
+        );
+
+        // 배치 결과 처리
+        batchResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            processedCount++;
+          } else {
+            const fileInfo = batch[index];
+            failedFiles.push(fileInfo.path);
+            console.warn(`Failed to process file ${fileInfo.path}:`, result.reason);
           }
-        } catch (fileError) {
-          console.warn(`Failed to process file ${fileInfo.path}:`, fileError);
-        }
+        });
+
+        // 진행 상황 로깅
+        console.log(`Processed ${processedCount}/${totalFiles} files (${failedFiles.length} failed)`);
+      }
+
+      // 실패한 파일이 있으면 경고
+      if (failedFiles.length > 0) {
+        console.warn(`⚠️  ${failedFiles.length}개 파일 처리 실패:`, failedFiles.slice(0, 5));
       }
 
       // 세션 상태 업데이트
